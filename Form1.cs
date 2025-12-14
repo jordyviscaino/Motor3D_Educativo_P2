@@ -1,135 +1,88 @@
 ﻿using System;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Windows.Forms;
-using OpenTK;
-using OpenTK.Graphics.OpenGL;
-// Tus namespaces
-using Motor3D_Educativo_P2.Core;
-using Motor3D_Educativo_P2.Geometry;
 
 namespace Motor3D_Educativo_P2
 {
     public partial class Form1 : Form
     {
-        Transform _transform = new Transform();
-        Mesh _mesh;
-        bool _loaded = false;
+        Modelo3D modeloActual;
+        Point centroPantalla;
+        float rotacionAuto = 0;
 
         public Form1()
         {
             InitializeComponent();
 
-            // --- CORRECCIÓN: Conectar eventos AQUÍ, no en Load ---
-            glControl1.Load += GlControl1_Load;
-            glControl1.Paint += GlControl1_Paint;
-            glControl1.Resize += GlControl1_Resize;
+            // Importante para que no parpadee
+            this.DoubleBuffered = true;
+            if (pictureBox1 != null) { } // Solo referencia para asegurar que existe
         }
 
         private void Form1_Load(object sender, EventArgs e)
         {
-            // Cargar geometría
-            _mesh = MeshFactory.CrearCubo();
+            // Carga inicial
+            modeloActual = MeshFactory.CrearCubo(100);
 
-            // Configurar controles UI
-            trackRotX.Scroll += (s, ev) => {
-                _transform.Rotation = new Vector3(trackRotX.Value, trackRotY.Value, 0);
-                glControl1.Invalidate();
+            // Timer de animación
+            Timer t = new Timer();
+            t.Interval = 30;
+            t.Tick += (s, ev) => {
+                rotacionAuto += 2.0f;
+                if (modeloActual != null)
+                {
+                    // Combinamos rotación manual (sliders) + automática
+                    float rx = (trackRotX != null) ? trackRotX.Value : 0;
+                    float ry = (trackRotY != null) ? trackRotY.Value : 0;
+
+                    modeloActual.RotX = rx;
+                    modeloActual.RotY = ry + rotacionAuto;
+                    pictureBox1.Invalidate(); // Pedir redibujar
+                }
             };
-            trackRotY.Scroll += (s, ev) => {
-                _transform.Rotation = new Vector3(trackRotX.Value, trackRotY.Value, 0);
-                glControl1.Invalidate();
-            };
+            t.Start();
 
-            if (btnCambiar != null)
-            {
-                btnCambiar.Click += (s, ev) => {
-                    _mesh = MeshFactory.CrearEsfera(2.0f, 20, 20);
-                    glControl1.Invalidate();
-                };
-            }
-
-            // Iniciar bucle de redibujado
-            Application.Idle += (s, ev) => {
-                if (_loaded) glControl1.Invalidate();
-            };
+            // Configurar botones si existen
+            if (btnCambiar != null) btnCambiar.Click += (s, ev) => CambiarFigura();
         }
 
-        private void GlControl1_Load(object sender, EventArgs e)
+        int figuraIndice = 0;
+        void CambiarFigura()
         {
-            // PRUEBA DE VIDA: Si no ves este mensaje, el GLControl no existe o no está conectado.
-            // MessageBox.Show("¡OpenGL ha iniciado correctamente!", "Diagnóstico"); 
-            // (Descomenta la línea de arriba si sigues sin ver nada)
+            figuraIndice++;
+            if (figuraIndice > 2) figuraIndice = 0;
 
-            try
+            switch (figuraIndice)
             {
-                glControl1.MakeCurrent(); // Asegurar contexto
-                _loaded = true;
-
-                // Usamos un color ROJO FURIOSO para saber si funciona
-                GL.ClearColor(1.0f, 0.0f, 0.0f, 1.0f);
-
-                GL.Enable(EnableCap.DepthTest);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("Error al iniciar OpenGL: " + ex.Message);
+                case 0: modeloActual = MeshFactory.CrearCubo(100); break;
+                case 1: modeloActual = MeshFactory.CrearPiramide(100, 150); break;
+                case 2: modeloActual = MeshFactory.CrearCilindro(50, 150, 12); break;
             }
         }
 
-        private void GlControl1_Resize(object sender, EventArgs e)
+        private void pictureBox1_Paint(object sender, PaintEventArgs e)
         {
-            if (!_loaded) return;
-            try
+            // Configuración de Calidad
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            e.Graphics.Clear(Color.Black);
+
+            if (modeloActual != null)
             {
-                glControl1.MakeCurrent();
-                GL.Viewport(0, 0, glControl1.Width, glControl1.Height);
-                Matrix4 p = Matrix4.CreatePerspectiveFieldOfView(MathHelper.DegreesToRadians(45f), glControl1.Width / (float)glControl1.Height, 0.1f, 100f);
-                GL.MatrixMode(MatrixMode.Projection);
-                GL.LoadMatrix(ref p);
+                // Calcular centro
+                centroPantalla = new Point(pictureBox1.Width / 2, pictureBox1.Height / 2);
+                modeloActual.Draw(e.Graphics, centroPantalla);
             }
-            catch { }
         }
 
-        private void GlControl1_Paint(object sender, PaintEventArgs e)
+        private void pictureBox1_Resize(object sender, EventArgs e)
         {
-            if (!_loaded) return;
-
-            glControl1.MakeCurrent();
-
-            // 1. Limpiar pantalla (Fondo Naranja)
-            GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
-
-            // 2. Configurar la Cámara manualmente
-            Matrix4 view = Matrix4.LookAt(new Vector3(0, 0, 3), Vector3.Zero, Vector3.UnitY);
-            GL.MatrixMode(MatrixMode.Modelview);
-            GL.LoadMatrix(ref view);
-
-            // --- CORRECCIÓN AQUÍ ---
-            // Creamos una variable local para poder pasarla por referencia
-            Matrix4 identidad = Matrix4.Identity;
-            GL.MultMatrix(ref identidad);
-            // -----------------------
-
-            // 4. Dibujar triángulo de prueba
-            GL.Begin(PrimitiveType.Triangles);
-
-            GL.Color3(Color.Blue);
-            GL.Vertex3(-1.0f, -1.0f, 0.0f);
-
-            GL.Color3(Color.White);
-            GL.Vertex3(1.0f, -1.0f, 0.0f);
-
-            GL.Color3(Color.Green);
-            GL.Vertex3(0.0f, 1.0f, 0.0f);
-
-            GL.End();
-
-            glControl1.SwapBuffers();
+            pictureBox1.Invalidate();
         }
 
-        private void glControl1_Load_1(object sender, EventArgs e)
+        private void glControl1_Paint(object sender, PaintEventArgs e)
         {
-
+            this.pictureBox1.Paint += new System.Windows.Forms.PaintEventHandler(this.pictureBox1_Paint);
         }
     }
 }

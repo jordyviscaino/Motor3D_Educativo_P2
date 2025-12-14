@@ -61,6 +61,8 @@
     <Compile Include="Form1.Designer.cs">
       <DependentUpon>Form1.cs</DependentUpon>
     </Compile>
+    <Compile Include="Geometry\Figuras3D.cs" />
+    <Compile Include="Geometry\Math3D.cs" />
     <Compile Include="Geometry\MeshFactory.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

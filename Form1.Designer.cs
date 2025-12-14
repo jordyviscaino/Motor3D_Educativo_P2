@@ -2,15 +2,8 @@
 {
     partial class Form1
     {
-        /// <summary>
-        /// Variable del diseñador necesaria.
-        /// </summary>
         private System.ComponentModel.IContainer components = null;
 
-        /// <summary>
-        /// Limpiar los recursos que se estén usando.
-        /// </summary>
-        /// <param name="disposing">true si los recursos administrados se deben desechar; false en caso contrario.</param>
         protected override void Dispose(bool disposing)
         {
             if (disposing && (components != null))
@@ -22,14 +15,11 @@
 
         #region Código generado por el Diseñador de Windows Forms
 
-        /// <summary>
-        /// Método necesario para admitir el Diseñador. No se puede modificar
-        /// el contenido de este método con el editor de código.
-        /// </summary>
         private void InitializeComponent()
         {
             this.splitContainer1 = new System.Windows.Forms.SplitContainer();
-            this.glControl1 = new OpenTK.GLControl();
+            // 1. AQUÍ ESTÁ EL CAMBIO: Usamos PictureBox en vez de GLControl
+            this.pictureBox1 = new System.Windows.Forms.PictureBox();
             this.flowLayoutPanel1 = new System.Windows.Forms.FlowLayoutPanel();
             this.lblRotX = new System.Windows.Forms.Label();
             this.trackRotX = new System.Windows.Forms.TrackBar();
@@ -40,10 +30,12 @@
             this.splitContainer1.Panel1.SuspendLayout();
             this.splitContainer1.Panel2.SuspendLayout();
             this.splitContainer1.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)(this.pictureBox1)).BeginInit();
             this.flowLayoutPanel1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.trackRotX)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.trackRotY)).BeginInit();
             this.SuspendLayout();
+
             // 
             // splitContainer1
             // 
@@ -53,7 +45,7 @@
             // 
             // splitContainer1.Panel1
             // 
-            this.splitContainer1.Panel1.Controls.Add(this.glControl1);
+            this.splitContainer1.Panel1.Controls.Add(this.pictureBox1); // Agregamos el PictureBox
             // 
             // splitContainer1.Panel2
             // 
@@ -61,17 +53,21 @@
             this.splitContainer1.Size = new System.Drawing.Size(800, 450);
             this.splitContainer1.SplitterDistance = 560;
             this.splitContainer1.TabIndex = 0;
+
             // 
-            // glControl1
+            // pictureBox1
             // 
-            this.glControl1.BackColor = System.Drawing.Color.Black;
-            this.glControl1.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.glControl1.Location = new System.Drawing.Point(0, 0);
-            this.glControl1.Name = "glControl1";
-            this.glControl1.Size = new System.Drawing.Size(560, 450);
-            this.glControl1.TabIndex = 0;
-            this.glControl1.VSync = false;
-            this.glControl1.Load += new System.EventHandler(this.glControl1_Load_1);
+            this.pictureBox1.BackColor = System.Drawing.Color.Black; // Fondo negro
+            this.pictureBox1.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.pictureBox1.Location = new System.Drawing.Point(0, 0);
+            this.pictureBox1.Name = "pictureBox1";
+            this.pictureBox1.Size = new System.Drawing.Size(560, 450);
+            this.pictureBox1.TabIndex = 0;
+            this.pictureBox1.TabStop = false;
+            // IMPORTANTE: Conectar el evento Paint
+            this.pictureBox1.Paint += new System.Windows.Forms.PaintEventHandler(this.pictureBox1_Paint);
+            this.pictureBox1.Resize += new System.EventHandler(this.pictureBox1_Resize);
+
             // 
             // flowLayoutPanel1
             // 
@@ -94,7 +90,7 @@
             this.lblRotX.Font = new System.Drawing.Font("Microsoft Sans Serif", 10F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.lblRotX.Location = new System.Drawing.Point(13, 10);
             this.lblRotX.Name = "lblRotX";
-            this.lblRotX.Size = new System.Drawing.Size(87, 17);
+            this.lblRotX.Size = new System.Drawing.Size(89, 17);
             this.lblRotX.TabIndex = 0;
             this.lblRotX.Text = "Rotación X";
             // 
@@ -112,7 +108,7 @@
             this.lblRotY.Font = new System.Drawing.Font("Microsoft Sans Serif", 10F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.lblRotY.Location = new System.Drawing.Point(13, 78);
             this.lblRotY.Name = "lblRotY";
-            this.lblRotY.Size = new System.Drawing.Size(87, 17);
+            this.lblRotY.Size = new System.Drawing.Size(89, 17);
             this.lblRotY.TabIndex = 2;
             this.lblRotY.Text = "Rotación Y";
             // 
@@ -130,7 +126,7 @@
             this.btnCambiar.Name = "btnCambiar";
             this.btnCambiar.Size = new System.Drawing.Size(200, 40);
             this.btnCambiar.TabIndex = 4;
-            this.btnCambiar.Text = "Cambiar Figura (Cubo/Esfera)";
+            this.btnCambiar.Text = "Cambiar Figura";
             this.btnCambiar.UseVisualStyleBackColor = true;
             // 
             // Form1
@@ -140,11 +136,13 @@
             this.ClientSize = new System.Drawing.Size(800, 450);
             this.Controls.Add(this.splitContainer1);
             this.Name = "Form1";
-            this.Text = "Motor 3D - Entorno de Pruebas (Dev B)";
+            this.Text = "Motor 3D - GDI+ (Dev B)";
+            this.Load += new System.EventHandler(this.Form1_Load);
             this.splitContainer1.Panel1.ResumeLayout(false);
             this.splitContainer1.Panel2.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)(this.splitContainer1)).EndInit();
             this.splitContainer1.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)(this.pictureBox1)).EndInit();
             this.flowLayoutPanel1.ResumeLayout(false);
             this.flowLayoutPanel1.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)(this.trackRotX)).EndInit();
@@ -156,7 +154,8 @@
         #endregion
 
         private System.Windows.Forms.SplitContainer splitContainer1;
-        private OpenTK.GLControl glControl1;
+        // Declaramos el PictureBox
+        private System.Windows.Forms.PictureBox pictureBox1;
         private System.Windows.Forms.FlowLayoutPanel flowLayoutPanel1;
         private System.Windows.Forms.Label lblRotX;
         private System.Windows.Forms.TrackBar trackRotX;
