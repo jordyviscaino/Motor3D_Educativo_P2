@@ -52,6 +52,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Geometry\Camara.cs" />
     <Compile Include="Core\Mesh.cs" />
     <Compile Include="Core\Transform.cs" />
     <Compile Include="Core\Vertex.cs" />
