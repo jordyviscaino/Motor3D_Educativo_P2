@@ -1,5 +1,6 @@
 ﻿using Motor3D_Educativo_P2.Geometry;
 using System;
+using System.Collections.Generic; // Added for List<>
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Windows.Forms;
@@ -8,7 +9,8 @@ namespace Motor3D_Educativo_P2
 {
     public partial class Form1 : Form
     {
-        Modelo3D modeloActual;
+        Escena escena = new Escena(); // Reemplaza modeloActual único por una escena
+        Modelo3D modeloSeleccionado; // Referencia al modelo actualmente seleccionado para editar
         Camara camara = new Camara(); // Instancia de la cámara
         Point centroPantalla;
         Point lastMousePos;
@@ -35,29 +37,49 @@ namespace Motor3D_Educativo_P2
 
         private void Form1_Load(object sender, EventArgs e)
         {
-            // Cargar cubo por defecto
-            modeloActual = MeshFactory.CrearCubo(100);
+            // Cargar cubo por defecto y añadirlo a la escena
+            var cuboInicial = MeshFactory.CrearCubo(100);
+            escena.Modelos.Add(cuboInicial);
+            SeleccionarModelo(cuboInicial);
 
             // -- GENERACIÓN DE UI --
             flowLayoutPanel1.Controls.Clear();
-            Button btn = new Button(); btn.Text = "Cambiar Figura"; btn.Height = 40; btn.Width = 200;
-            btn.Click += (s, ev) => CambiarFigura();
-            flowLayoutPanel1.Controls.Add(btn);
+            
+            // Botón para añadir nueva figura
+            Button btnAdd = new Button(); btnAdd.Text = "Añadir Figura"; btnAdd.Height = 40; btnAdd.Width = 200;
+            btnAdd.Click += (s, ev) => AnadirFigura();
+            flowLayoutPanel1.Controls.Add(btnAdd);
+
+            // Botón para cambiar tipo de figura seleccionada (opcional, o para ciclar tipos en la nueva)
+            Button btnChange = new Button(); btnChange.Text = "Cambiar Tipo (Sel)"; btnChange.Height = 40; btnChange.Width = 200;
+            btnChange.Click += (s, ev) => CambiarTipoFiguraSeleccionada();
+            flowLayoutPanel1.Controls.Add(btnChange);
+
+            // Botón para eliminar figura seleccionada
+            Button btnDel = new Button(); btnDel.Text = "Eliminar Seleccionada"; btnDel.Height = 40; btnDel.Width = 200;
+            btnDel.Click += (s, ev) => EliminarFiguraSeleccionada();
+            flowLayoutPanel1.Controls.Add(btnDel);
+
+            // Botón para ciclar selección (simple)
+            Button btnNext = new Button(); btnNext.Text = "Siguiente Figura"; btnNext.Height = 40; btnNext.Width = 200;
+            btnNext.Click += (s, ev) => SeleccionarSiguiente();
+            flowLayoutPanel1.Controls.Add(btnNext);
+
 
             GenerarSliders("TRASLACIÓN", -200, 200, 0, (c, v) => {
-                if (modeloActual == null) return;
-                if (c == 'X') modeloActual.Position.x = v; if (c == 'Y') modeloActual.Position.y = v; if (c == 'Z') modeloActual.Position.z = v;
+                if (modeloSeleccionado == null) return;
+                if (c == 'X') modeloSeleccionado.Position.x = v; if (c == 'Y') modeloSeleccionado.Position.y = v; if (c == 'Z') modeloSeleccionado.Position.z = v;
                 pictureBox1.Invalidate();
             });
             GenerarSliders("ROTACIÓN", 0, 360, 0, (c, v) => {
-                if (modeloActual == null) return;
-                if (c == 'X') modeloActual.Rotation.x = v; if (c == 'Y') modeloActual.Rotation.y = v; if (c == 'Z') modeloActual.Rotation.z = v;
+                if (modeloSeleccionado == null) return;
+                if (c == 'X') modeloSeleccionado.Rotation.x = v; if (c == 'Y') modeloSeleccionado.Rotation.y = v; if (c == 'Z') modeloSeleccionado.Rotation.z = v;
                 pictureBox1.Invalidate();
             });
             GenerarSliders("ESCALA", 1, 30, 10, (c, v) => {
-                if (modeloActual == null) return;
+                if (modeloSeleccionado == null) return;
                 float s = v / 10.0f;
-                if (c == 'X') modeloActual.Scale.x = s; if (c == 'Y') modeloActual.Scale.y = s; if (c == 'Z') modeloActual.Scale.z = s;
+                if (c == 'X') modeloSeleccionado.Scale.x = s; if (c == 'Y') modeloSeleccionado.Scale.y = s; if (c == 'Z') modeloSeleccionado.Scale.z = s;
                 pictureBox1.Invalidate();
             });
         }
@@ -72,23 +94,85 @@ namespace Motor3D_Educativo_P2
                 Label l = new Label(); l.Text = c.ToString(); l.Location = new Point(10, y); l.ForeColor = Color.Black; l.AutoSize = true;
                 TrackBar tb = new TrackBar(); tb.Location = new Point(30, y); tb.Size = new Size(180, 30); tb.Minimum = min; tb.Maximum = max; tb.Value = def; tb.TickStyle = TickStyle.None;
                 tb.Scroll += (s, e) => act(c, tb.Value);
+                // Actualizar sliders cuando cambia la selección requeriría lógica extra, 
+                // por ahora los sliders controlan "delta" o valor absoluto según implementación.
+                // Aquí es valor absoluto, lo cual puede saltar si cambias de objeto. 
+                // Para simplificar, asumimos que el usuario reajusta.
                 g.Controls.Add(l); g.Controls.Add(tb); y += 45;
             }
             flowLayoutPanel1.Controls.Add(g);
         }
 
-        void CambiarFigura()
+        void SeleccionarModelo(Modelo3D m)
         {
+            if (modeloSeleccionado != null) modeloSeleccionado.Selected = false;
+            modeloSeleccionado = m;
+            if (modeloSeleccionado != null) modeloSeleccionado.Selected = true;
+            pictureBox1.Invalidate();
+        }
+
+        void AnadirFigura()
+        {
+            // Añade un cubo por defecto en una posición ligeramente aleatoria o fija
+            var m = MeshFactory.CrearCubo(100);
+            m.Position = new Math3D.Vector3D(0, 0, 0); // O random
+            escena.Modelos.Add(m);
+            SeleccionarModelo(m);
+        }
+
+        void EliminarFiguraSeleccionada()
+        {
+            if (modeloSeleccionado != null)
+            {
+                escena.Modelos.Remove(modeloSeleccionado);
+                if (escena.Modelos.Count > 0) SeleccionarModelo(escena.Modelos[escena.Modelos.Count - 1]);
+                else SeleccionarModelo(null);
+            }
+        }
+
+        void SeleccionarSiguiente()
+        {
+            if (escena.Modelos.Count == 0) return;
+            int index = escena.Modelos.IndexOf(modeloSeleccionado);
+            index++;
+            if (index >= escena.Modelos.Count) index = 0;
+            SeleccionarModelo(escena.Modelos[index]);
+        }
+
+        void CambiarTipoFiguraSeleccionada()
+        {
+            if (modeloSeleccionado == null) return;
+            
+            // Guardar transformaciones actuales
+            var pos = modeloSeleccionado.Position;
+            var rot = modeloSeleccionado.Rotation;
+            var scl = modeloSeleccionado.Scale;
+
             figuraIndice++; if (figuraIndice > 4) figuraIndice = 0;
+            
+            Modelo3D nuevoModelo = null;
             switch (figuraIndice)
             {
-                case 0: modeloActual = MeshFactory.CrearCubo(100); break;
-                case 1: modeloActual = MeshFactory.CrearPiramide(100, 150); break;
-                case 2: modeloActual = MeshFactory.CrearCilindro(60, 150, 16); break;
-                case 3: modeloActual = MeshFactory.CrearCono(60, 150, 16); break;
-                case 4: modeloActual = MeshFactory.CrearEsfera(80, 12, 12); break;
+                case 0: nuevoModelo = MeshFactory.CrearCubo(100); break;
+                case 1: nuevoModelo = MeshFactory.CrearPiramide(100, 150); break;
+                case 2: nuevoModelo = MeshFactory.CrearCilindro(60, 150, 16); break;
+                case 3: nuevoModelo = MeshFactory.CrearCono(60, 150, 16); break;
+                case 4: nuevoModelo = MeshFactory.CrearEsfera(80, 12, 12); break;
             }
-            modeloActual.Rotation = new Math3D.Vector3D(0, 0, 0);
+
+            // Restaurar transformaciones
+            nuevoModelo.Position = pos;
+            nuevoModelo.Rotation = rot;
+            nuevoModelo.Scale = scl;
+            nuevoModelo.Selected = true;
+
+            // Reemplazar en la lista
+            int index = escena.Modelos.IndexOf(modeloSeleccionado);
+            if (index != -1)
+            {
+                escena.Modelos[index] = nuevoModelo;
+                modeloSeleccionado = nuevoModelo;
+            }
             pictureBox1.Invalidate();
         }
 
@@ -135,11 +219,8 @@ namespace Motor3D_Educativo_P2
             // 1. Dibujar el Suelo (Grid)
             DrawGrid(e.Graphics);
 
-            // 2. Dibujar la Figura
-            if (modeloActual != null)
-            {
-                modeloActual.Draw(e.Graphics, centroPantalla, camara);
-            }
+            // 2. Dibujar la Escena (todos los modelos)
+            escena.Draw(e.Graphics, centroPantalla, camara);
         }
 
         // --- DIBUJO DEL GRID Y AUXILIARES (Aquí tenías errores antes) ---

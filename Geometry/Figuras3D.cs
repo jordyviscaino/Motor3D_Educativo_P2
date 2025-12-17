@@ -13,6 +13,7 @@ namespace Motor3D_Educativo_P2
         public Math3D.Vector3D Position = new Math3D.Vector3D(0, 0, 0);
         public Math3D.Vector3D Rotation = new Math3D.Vector3D(0, 0, 0);
         public Math3D.Vector3D Scale = new Math3D.Vector3D(1, 1, 1);
+        public bool Selected = false; // Propiedad para indicar si el modelo está seleccionado
 
         // --- MÉTODO DRAW CORREGIDO ---
         public void Draw(Graphics g, Point viewCenter, Camara cam)
@@ -70,7 +71,8 @@ namespace Motor3D_Educativo_P2
                     {
                         g.FillPolygon(brush, face.Corners2D);
                     }
-                    g.DrawPolygon(Pens.Black, face.Corners2D);
+                    // Dibujar borde: Rojo si está seleccionado, Negro si no
+                    g.DrawPolygon(Selected ? Pens.Red : Pens.Black, face.Corners2D);
                 }
             }
         }
@@ -103,6 +105,28 @@ namespace Motor3D_Educativo_P2
             if (ry != 0) r = Math3D.RotateY(r, ry);
             if (rz != 0) r = Math3D.RotateZ(r, rz);
             return r;
+        }
+    }
+
+    // Clase para manejar la escena con múltiples modelos
+    public class Escena
+    {
+        public List<Modelo3D> Modelos = new List<Modelo3D>();
+
+        public void Draw(Graphics g, Point viewCenter, Camara cam)
+        {
+            // Ordenar modelos por distancia a la cámara para un dibujado básico correcto (Painter's Algorithm a nivel de objeto)
+            var sortedModels = Modelos.OrderByDescending(m => {
+                // Distancia desde el centro del modelo a la cámara
+                return Math.Sqrt(Math.Pow(m.Position.x - cam.Position.x, 2) +
+                                 Math.Pow(m.Position.y - cam.Position.y, 2) +
+                                 Math.Pow(m.Position.z - cam.Position.z, 2));
+            }).ToList();
+
+            foreach (var modelo in sortedModels)
+            {
+                modelo.Draw(g, viewCenter, cam);
+            }
         }
     }
 
