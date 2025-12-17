@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic; // Added for List<> 
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Linq; // Necesario para OrderByDescending
 using System.Windows.Forms;
 
 namespace Motor3D_Educativo_P2
@@ -15,6 +16,7 @@ namespace Motor3D_Educativo_P2
         Point centroPantalla;
         Point lastMousePos;
         bool isMouseDown = false;
+        bool isDragging = false; // Para diferenciar entre clic y arrastre
         int figuraIndice = 0;
         
         // Contadores para nombres únicos de objetos
@@ -26,6 +28,11 @@ namespace Motor3D_Educativo_P2
             { "Cono", 0 },
             { "Esfera", 0 }
         };
+
+        // Referencias a los sliders para poder actualizarlos cuando cambia la selección
+        private Dictionary<string, TrackBar> slidersTraslacion = new Dictionary<string, TrackBar>();
+        private Dictionary<string, TrackBar> slidersRotacion = new Dictionary<string, TrackBar>();
+        private Dictionary<string, TrackBar> slidersEscala = new Dictionary<string, TrackBar>();
 
         public Form1()
         {
@@ -39,10 +46,11 @@ namespace Motor3D_Educativo_P2
             this.KeyDown += Form1_KeyDown;
 
             // Eventos del Mouse
-            pictureBox1.MouseDown += (s, e) => { isMouseDown = true; lastMousePos = e.Location; };
-            pictureBox1.MouseUp += (s, e) => { isMouseDown = false; };
+            pictureBox1.MouseDown += PictureBox1_MouseDown;
+            pictureBox1.MouseUp += PictureBox1_MouseUp;
             pictureBox1.MouseMove += PictureBox1_MouseMove;
             pictureBox1.MouseWheel += PictureBox1_MouseWheel;
+            pictureBox1.MouseClick += PictureBox1_MouseClick; // Nuevo evento para selección
         }
 
         private void Form1_Load(object sender, EventArgs e)
@@ -52,7 +60,6 @@ namespace Motor3D_Educativo_P2
             cuboInicial.Nombre = GenerarNombreUnico("Cubo");
             escena.Modelos.Add(cuboInicial);
             ActualizarListaObjetos();
-            SeleccionarModelo(cuboInicial);
 
             // -- GENERACIÓN DE UI --
             flowLayoutPanel1.Controls.Clear();
@@ -93,22 +100,31 @@ namespace Motor3D_Educativo_P2
             btnDel.Click += (s, ev) => EliminarFiguraSeleccionada();
             flowLayoutPanel1.Controls.Add(btnDel);
 
-            GenerarSliders("TRASLACIÓN", -200, 200, 0, (c, v) => {
+            GenerarSliders("TRASLACIÓN", -200, 200, 0, slidersTraslacion, (c, v) => {
                 if (modeloSeleccionado == null) return;
-                if (c == 'X') modeloSeleccionado.Position.x = v; if (c == 'Y') modeloSeleccionado.Position.y = v; if (c == 'Z') modeloSeleccionado.Position.z = v;
+                if (c == 'X') modeloSeleccionado.Position.x = v; 
+                if (c == 'Y') modeloSeleccionado.Position.y = v; 
+                if (c == 'Z') modeloSeleccionado.Position.z = v;
                 pictureBox1.Invalidate();
             });
-            GenerarSliders("ROTACIÓN", 0, 360, 0, (c, v) => {
+            GenerarSliders("ROTACIÓN", 0, 360, 0, slidersRotacion, (c, v) => {
                 if (modeloSeleccionado == null) return;
-                if (c == 'X') modeloSeleccionado.Rotation.x = v; if (c == 'Y') modeloSeleccionado.Rotation.y = v; if (c == 'Z') modeloSeleccionado.Rotation.z = v;
+                if (c == 'X') modeloSeleccionado.Rotation.x = v; 
+                if (c == 'Y') modeloSeleccionado.Rotation.y = v; 
+                if (c == 'Z') modeloSeleccionado.Rotation.z = v;
                 pictureBox1.Invalidate();
             });
-            GenerarSliders("ESCALA", 1, 30, 10, (c, v) => {
+            GenerarSliders("ESCALA", 1, 30, 10, slidersEscala, (c, v) => {
                 if (modeloSeleccionado == null) return;
                 float s = v / 10.0f;
-                if (c == 'X') modeloSeleccionado.Scale.x = s; if (c == 'Y') modeloSeleccionado.Scale.y = s; if (c == 'Z') modeloSeleccionado.Scale.z = s;
+                if (c == 'X') modeloSeleccionado.Scale.x = s; 
+                if (c == 'Y') modeloSeleccionado.Scale.y = s; 
+                if (c == 'Z') modeloSeleccionado.Scale.z = s;
                 pictureBox1.Invalidate();
             });
+
+            // Seleccionar el cubo inicial después de crear los sliders
+            SeleccionarModelo(cuboInicial);
         }
 
         // Genera un nombre único para el objeto (ej: "Cubo 1", "Cubo 2")
@@ -160,8 +176,8 @@ namespace Motor3D_Educativo_P2
             }
         }
 
-        // Helper para UI (simplificado)
-        void GenerarSliders(string t, int min, int max, int def, Action<char, int> act)
+        // Helper para UI (modificado para almacenar referencias a los sliders)
+        void GenerarSliders(string t, int min, int max, int def, Dictionary<string, TrackBar> diccionarioSliders, Action<char, int> act)
         {
             GroupBox g = new GroupBox(); 
             g.Text = t; 
@@ -187,6 +203,9 @@ namespace Motor3D_Educativo_P2
                 tb.TickStyle = TickStyle.None;
                 tb.Scroll += (s, e) => act(c, tb.Value);
                 
+                // Almacenar referencia al TrackBar
+                diccionarioSliders[c.ToString()] = tb;
+                
                 g.Controls.Add(l); 
                 g.Controls.Add(tb); 
                 y += 45;
@@ -198,7 +217,13 @@ namespace Motor3D_Educativo_P2
         {
             if (modeloSeleccionado != null) modeloSeleccionado.Selected = false;
             modeloSeleccionado = m;
-            if (modeloSeleccionado != null) modeloSeleccionado.Selected = true;
+            if (modeloSeleccionado != null) 
+            {
+                modeloSeleccionado.Selected = true;
+                
+                // Actualizar los sliders con los valores del modelo seleccionado
+                ActualizarSliders();
+            }
             
             // Actualizar selección en el ListBox sin disparar el evento
             if (m != null)
@@ -211,6 +236,38 @@ namespace Motor3D_Educativo_P2
             }
             
             pictureBox1.Invalidate();
+        }
+
+        /// <summary>
+        /// Actualiza los valores de los sliders según el modelo seleccionado
+        /// </summary>
+        void ActualizarSliders()
+        {
+            if (modeloSeleccionado == null) return;
+
+            // Actualizar Traslación
+            if (slidersTraslacion.ContainsKey("X"))
+                slidersTraslacion["X"].Value = (int)Math.Max(slidersTraslacion["X"].Minimum, Math.Min(slidersTraslacion["X"].Maximum, modeloSeleccionado.Position.x));
+            if (slidersTraslacion.ContainsKey("Y"))
+                slidersTraslacion["Y"].Value = (int)Math.Max(slidersTraslacion["Y"].Minimum, Math.Min(slidersTraslacion["Y"].Maximum, modeloSeleccionado.Position.y));
+            if (slidersTraslacion.ContainsKey("Z"))
+                slidersTraslacion["Z"].Value = (int)Math.Max(slidersTraslacion["Z"].Minimum, Math.Min(slidersTraslacion["Z"].Maximum, modeloSeleccionado.Position.z));
+
+            // Actualizar Rotación
+            if (slidersRotacion.ContainsKey("X"))
+                slidersRotacion["X"].Value = (int)Math.Max(slidersRotacion["X"].Minimum, Math.Min(slidersRotacion["X"].Maximum, modeloSeleccionado.Rotation.x));
+            if (slidersRotacion.ContainsKey("Y"))
+                slidersRotacion["Y"].Value = (int)Math.Max(slidersRotacion["Y"].Minimum, Math.Min(slidersRotacion["Y"].Maximum, modeloSeleccionado.Rotation.y));
+            if (slidersRotacion.ContainsKey("Z"))
+                slidersRotacion["Z"].Value = (int)Math.Max(slidersRotacion["Z"].Minimum, Math.Min(slidersRotacion["Z"].Maximum, modeloSeleccionado.Rotation.z));
+
+            // Actualizar Escala (multiplicar por 10 porque los sliders van de 1 a 30)
+            if (slidersEscala.ContainsKey("X"))
+                slidersEscala["X"].Value = (int)Math.Max(slidersEscala["X"].Minimum, Math.Min(slidersEscala["X"].Maximum, modeloSeleccionado.Scale.x * 10));
+            if (slidersEscala.ContainsKey("Y"))
+                slidersEscala["Y"].Value = (int)Math.Max(slidersEscala["Y"].Minimum, Math.Min(slidersEscala["Y"].Maximum, modeloSeleccionado.Scale.y * 10));
+            if (slidersEscala.ContainsKey("Z"))
+                slidersEscala["Z"].Value = (int)Math.Max(slidersEscala["Z"].Minimum, Math.Min(slidersEscala["Z"].Maximum, modeloSeleccionado.Scale.z * 10));
         }
 
         void AnadirFigura()
@@ -304,10 +361,37 @@ namespace Motor3D_Educativo_P2
             pictureBox1.Invalidate();
         }
 
+        private void PictureBox1_MouseClick(object sender, MouseEventArgs e)
+        {
+            // Solo seleccionar si no fue un arrastre
+            if (!isDragging && e.Button == MouseButtons.Left)
+            {
+                SeleccionarObjetoPorMouse(e.Location);
+            }
+        }
+
+        private void PictureBox1_MouseDown(object sender, MouseEventArgs e)
+        {
+            isMouseDown = true;
+            isDragging = false;
+            lastMousePos = e.Location;
+        }
+
+        private void PictureBox1_MouseUp(object sender, MouseEventArgs e)
+        {
+            isMouseDown = false;
+        }
+
         private void PictureBox1_MouseMove(object sender, MouseEventArgs e)
         {
             if (isMouseDown)
             {
+                // Si se mueve el mouse mientras está presionado, es un arrastre
+                if (Math.Abs(e.X - lastMousePos.X) > 3 || Math.Abs(e.Y - lastMousePos.Y) > 3)
+                {
+                    isDragging = true;
+                }
+
                 camara.Rotation.y += (e.X - lastMousePos.X) * 0.5f;
                 camara.Rotation.x += (e.Y - lastMousePos.Y) * 0.5f;
                 lastMousePos = e.Location;
@@ -319,6 +403,152 @@ namespace Motor3D_Educativo_P2
         {
             camara.Position.z += e.Delta * 0.5f;
             pictureBox1.Invalidate();
+        }
+
+        /// <summary>
+        /// Selecciona un objeto en la escena basándose en la posición del mouse
+        /// </summary>
+        private void SeleccionarObjetoPorMouse(Point mousePos)
+        {
+            centroPantalla = new Point(pictureBox1.Width / 2, pictureBox1.Height / 2);
+            
+            // Buscar el objeto más cercano que intersecte con el punto del mouse
+            Modelo3D objetoSeleccionado = null;
+            float menorDistancia = float.MaxValue;
+
+            // Recorrer todos los modelos de atrás hacia adelante (ordenados por profundidad)
+            var modelosOrdenados = escena.Modelos.OrderByDescending(m => {
+                return Math.Sqrt(Math.Pow(m.Position.x - camara.Position.x, 2) +
+                                 Math.Pow(m.Position.y - camara.Position.y, 2) +
+                                 Math.Pow(m.Position.z - camara.Position.z, 2));
+            }).ToList();
+
+            foreach (var modelo in modelosOrdenados)
+            {
+                // Proyectar todas las caras del modelo
+                foreach (var face in modelo.Faces)
+                {
+                    PointF[] puntosProyectados = new PointF[face.Corners3D.Length];
+                    bool visible = true;
+                    float profundidadPromedio = 0;
+
+                    for (int i = 0; i < face.Corners3D.Length; i++)
+                    {
+                        // Aplicar las mismas transformaciones que en el método Draw
+                        Math3D.Vector3D worldPoint = AplicarTransformacion(face.Corners3D[i], modelo);
+                        
+                        // Transformación de cámara
+                        Math3D.Vector3D viewPoint = new Math3D.Vector3D(
+                            worldPoint.x - camara.Position.x,
+                            worldPoint.y - camara.Position.y,
+                            worldPoint.z - camara.Position.z
+                        );
+
+                        // Rotar según la cámara
+                        viewPoint = RotarPunto(viewPoint, -camara.Rotation.x, -camara.Rotation.y, 0);
+
+                        // Proyección
+                        float zoom = 600f;
+
+                        if (viewPoint.z > -1)
+                        {
+                            visible = false;
+                            break;
+                        }
+
+                        float zDepth = -viewPoint.z;
+                        profundidadPromedio += zDepth;
+                        float x2d = (viewPoint.x * zoom) / zDepth + centroPantalla.X;
+                        float y2d = (-viewPoint.y * zoom) / zDepth + centroPantalla.Y;
+
+                        puntosProyectados[i] = new PointF(x2d, y2d);
+                    }
+
+                    if (visible && puntosProyectados.Length >= 3)
+                    {
+                        profundidadPromedio /= puntosProyectados.Length;
+
+                        // Verificar si el punto del mouse está dentro del polígono proyectado
+                        if (PuntoEnPoligono(mousePos, puntosProyectados))
+                        {
+                            // Seleccionar el objeto más cercano a la cámara
+                            if (profundidadPromedio < menorDistancia)
+                            {
+                                menorDistancia = profundidadPromedio;
+                                objetoSeleccionado = modelo;
+                            }
+                        }
+                    }
+                }
+
+                // Si ya encontramos un objeto, detener la búsqueda (el primero visible es el más cercano)
+                if (objetoSeleccionado != null)
+                {
+                    break;
+                }
+            }
+
+            // Seleccionar el objeto encontrado
+            if (objetoSeleccionado != null)
+            {
+                SeleccionarModelo(objetoSeleccionado);
+            }
+        }
+
+        /// <summary>
+        /// Aplica las transformaciones de escala, rotación y traslación a un vértice
+        /// </summary>
+        private Math3D.Vector3D AplicarTransformacion(Math3D.Vector3D vertice, Modelo3D modelo)
+        {
+            // 1. Escala
+            float vx = vertice.x * modelo.Scale.x;
+            float vy = vertice.y * modelo.Scale.y;
+            float vz = vertice.z * modelo.Scale.z;
+
+            // 2. Rotación
+            Math3D.Vector3D rotado = RotarPunto(new Math3D.Vector3D(vx, vy, vz), 
+                                                 modelo.Rotation.x, modelo.Rotation.y, modelo.Rotation.z);
+
+            // 3. Traslación
+            rotado.x += modelo.Position.x;
+            rotado.y += modelo.Position.y;
+            rotado.z += modelo.Position.z;
+
+            return rotado;
+        }
+
+        /// <summary>
+        /// Rota un punto en el espacio 3D
+        /// </summary>
+        private Math3D.Vector3D RotarPunto(Math3D.Vector3D punto, float rx, float ry, float rz)
+        {
+            Math3D.Vector3D resultado = punto;
+            if (rx != 0) resultado = Math3D.RotateX(resultado, rx);
+            if (ry != 0) resultado = Math3D.RotateY(resultado, ry);
+            if (rz != 0) resultado = Math3D.RotateZ(resultado, rz);
+            return resultado;
+        }
+
+        /// <summary>
+        /// Determina si un punto está dentro de un polígono usando el algoritmo Ray Casting
+        /// </summary>
+        private bool PuntoEnPoligono(Point punto, PointF[] poligono)
+        {
+            bool dentro = false;
+            int j = poligono.Length - 1;
+
+            for (int i = 0; i < poligono.Length; i++)
+            {
+                if ((poligono[i].Y > punto.Y) != (poligono[j].Y > punto.Y) &&
+                    punto.X < (poligono[j].X - poligono[i].X) * (punto.Y - poligono[i].Y) / 
+                    (poligono[j].Y - poligono[i].Y) + poligono[i].X)
+                {
+                    dentro = !dentro;
+                }
+                j = i;
+            }
+
+            return dentro;
         }
 
         // --- RENDERIZADO PRINCIPAL ---
