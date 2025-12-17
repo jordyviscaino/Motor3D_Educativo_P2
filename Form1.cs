@@ -1,6 +1,6 @@
 ﻿using Motor3D_Educativo_P2.Geometry;
 using System;
-using System.Collections.Generic; // Added for List<>
+using System.Collections.Generic; // Added for List<> 
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Windows.Forms;
@@ -16,6 +16,16 @@ namespace Motor3D_Educativo_P2
         Point lastMousePos;
         bool isMouseDown = false;
         int figuraIndice = 0;
+        
+        // Contadores para nombres únicos de objetos
+        private Dictionary<string, int> contadoresObjetos = new Dictionary<string, int>
+        {
+            { "Cubo", 0 },
+            { "Pirámide", 0 },
+            { "Cilindro", 0 },
+            { "Cono", 0 },
+            { "Esfera", 0 }
+        };
 
         public Form1()
         {
@@ -39,32 +49,49 @@ namespace Motor3D_Educativo_P2
         {
             // Cargar cubo por defecto y añadirlo a la escena
             var cuboInicial = MeshFactory.CrearCubo(100);
+            cuboInicial.Nombre = GenerarNombreUnico("Cubo");
             escena.Modelos.Add(cuboInicial);
+            ActualizarListaObjetos();
             SeleccionarModelo(cuboInicial);
 
             // -- GENERACIÓN DE UI --
             flowLayoutPanel1.Controls.Clear();
             
             // Botón para añadir nueva figura
-            Button btnAdd = new Button(); btnAdd.Text = "Añadir Figura"; btnAdd.Height = 40; btnAdd.Width = 200;
+            Button btnAdd = new Button(); 
+            btnAdd.Text = "Añadir Figura"; 
+            btnAdd.Height = 40; 
+            btnAdd.Width = 200;
+            btnAdd.BackColor = Color.FromArgb(60, 60, 60);
+            btnAdd.ForeColor = Color.White;
+            btnAdd.FlatStyle = FlatStyle.Flat;
+            btnAdd.FlatAppearance.BorderColor = Color.FromArgb(100, 100, 100);
             btnAdd.Click += (s, ev) => AnadirFigura();
             flowLayoutPanel1.Controls.Add(btnAdd);
 
             // Botón para cambiar tipo de figura seleccionada (opcional, o para ciclar tipos en la nueva)
-            Button btnChange = new Button(); btnChange.Text = "Cambiar Tipo (Sel)"; btnChange.Height = 40; btnChange.Width = 200;
+            Button btnChange = new Button(); 
+            btnChange.Text = "Cambiar Tipo (Sel)"; 
+            btnChange.Height = 40; 
+            btnChange.Width = 200;
+            btnChange.BackColor = Color.FromArgb(60, 60, 60);
+            btnChange.ForeColor = Color.White;
+            btnChange.FlatStyle = FlatStyle.Flat;
+            btnChange.FlatAppearance.BorderColor = Color.FromArgb(100, 100, 100);
             btnChange.Click += (s, ev) => CambiarTipoFiguraSeleccionada();
             flowLayoutPanel1.Controls.Add(btnChange);
 
             // Botón para eliminar figura seleccionada
-            Button btnDel = new Button(); btnDel.Text = "Eliminar Seleccionada"; btnDel.Height = 40; btnDel.Width = 200;
+            Button btnDel = new Button(); 
+            btnDel.Text = "Eliminar Seleccionada"; 
+            btnDel.Height = 40; 
+            btnDel.Width = 200;
+            btnDel.BackColor = Color.FromArgb(80, 30, 30); // Rojo oscuro para eliminar
+            btnDel.ForeColor = Color.White;
+            btnDel.FlatStyle = FlatStyle.Flat;
+            btnDel.FlatAppearance.BorderColor = Color.FromArgb(120, 50, 50);
             btnDel.Click += (s, ev) => EliminarFiguraSeleccionada();
             flowLayoutPanel1.Controls.Add(btnDel);
-
-            // Botón para ciclar selección (simple)
-            Button btnNext = new Button(); btnNext.Text = "Siguiente Figura"; btnNext.Height = 40; btnNext.Width = 200;
-            btnNext.Click += (s, ev) => SeleccionarSiguiente();
-            flowLayoutPanel1.Controls.Add(btnNext);
-
 
             GenerarSliders("TRASLACIÓN", -200, 200, 0, (c, v) => {
                 if (modeloSeleccionado == null) return;
@@ -84,21 +111,85 @@ namespace Motor3D_Educativo_P2
             });
         }
 
+        // Genera un nombre único para el objeto (ej: "Cubo 1", "Cubo 2")
+        private string GenerarNombreUnico(string tipoBase)
+        {
+            contadoresObjetos[tipoBase]++;
+            return $"{tipoBase} {contadoresObjetos[tipoBase]}";
+        }
+
+        // Obtiene el icono visual para cada tipo de objeto (similar a Blender)
+        private string ObtenerIconoObjeto(string nombre)
+        {
+            if (nombre.Contains("Cubo")) return "🔳";
+            if (nombre.Contains("Pirámide")) return "🔺";
+            if (nombre.Contains("Cilindro")) return "⬭";
+            if (nombre.Contains("Cono")) return "🔻";
+            if (nombre.Contains("Esfera")) return "⚫";
+            return "📦";
+        }
+
+        // Actualiza el ListBox con todos los objetos de la escena
+        private void ActualizarListaObjetos()
+        {
+            listBoxObjetos.Items.Clear();
+            foreach (var modelo in escena.Modelos)
+            {
+                // Agregar icono visual antes del nombre
+                string itemText = $"  {ObtenerIconoObjeto(modelo.Nombre)} {modelo.Nombre}";
+                listBoxObjetos.Items.Add(itemText);
+            }
+            
+            // Seleccionar el item correspondiente al modelo seleccionado
+            if (modeloSeleccionado != null)
+            {
+                int index = escena.Modelos.IndexOf(modeloSeleccionado);
+                if (index >= 0 && index < listBoxObjetos.Items.Count)
+                {
+                    listBoxObjetos.SelectedIndex = index;
+                }
+            }
+        }
+
+        // Evento cuando se selecciona un objeto en el ListBox
+        private void listBoxObjetos_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (listBoxObjetos.SelectedIndex >= 0 && listBoxObjetos.SelectedIndex < escena.Modelos.Count)
+            {
+                SeleccionarModelo(escena.Modelos[listBoxObjetos.SelectedIndex]);
+            }
+        }
+
         // Helper para UI (simplificado)
         void GenerarSliders(string t, int min, int max, int def, Action<char, int> act)
         {
-            GroupBox g = new GroupBox(); g.Text = t; g.Size = new Size(220, 160); g.ForeColor = Color.White;
+            GroupBox g = new GroupBox(); 
+            g.Text = t; 
+            g.Size = new Size(220, 160); 
+            g.ForeColor = Color.White;
+            g.BackColor = Color.FromArgb(37, 37, 37); // Fondo oscuro para el GroupBox
             int y = 20;
             foreach (char c in new[] { 'X', 'Y', 'Z' })
             {
-                Label l = new Label(); l.Text = c.ToString(); l.Location = new Point(10, y); l.ForeColor = Color.Black; l.AutoSize = true;
-                TrackBar tb = new TrackBar(); tb.Location = new Point(30, y); tb.Size = new Size(180, 30); tb.Minimum = min; tb.Maximum = max; tb.Value = def; tb.TickStyle = TickStyle.None;
+                Label l = new Label(); 
+                l.Text = c.ToString(); 
+                l.Location = new Point(10, y); 
+                l.ForeColor = Color.White; // Color blanco para el texto
+                l.BackColor = Color.Transparent; // Fondo transparente
+                l.AutoSize = true;
+                
+                TrackBar tb = new TrackBar(); 
+                tb.Location = new Point(30, y); 
+                tb.Size = new Size(180, 30); 
+                tb.Minimum = min; 
+                tb.Maximum = max; 
+                tb.Value = def; 
+                tb.TickStyle = TickStyle.None;
                 tb.Scroll += (s, e) => act(c, tb.Value);
-                // Actualizar sliders cuando cambia la selección requeriría lógica extra, 
-                // por ahora los sliders controlan "delta" o valor absoluto según implementación.
-                // Aquí es valor absoluto, lo cual puede saltar si cambias de objeto. 
-                // Para simplificar, asumimos que el usuario reajusta.
-                g.Controls.Add(l); g.Controls.Add(tb); y += 45;
+                
+                g.Controls.Add(l); 
+                g.Controls.Add(tb); 
+                y += 45;
             }
             flowLayoutPanel1.Controls.Add(g);
         }
@@ -108,6 +199,17 @@ namespace Motor3D_Educativo_P2
             if (modeloSeleccionado != null) modeloSeleccionado.Selected = false;
             modeloSeleccionado = m;
             if (modeloSeleccionado != null) modeloSeleccionado.Selected = true;
+            
+            // Actualizar selección en el ListBox sin disparar el evento
+            if (m != null)
+            {
+                int index = escena.Modelos.IndexOf(m);
+                if (index >= 0 && listBoxObjetos.SelectedIndex != index)
+                {
+                    listBoxObjetos.SelectedIndex = index;
+                }
+            }
+            
             pictureBox1.Invalidate();
         }
 
@@ -115,8 +217,10 @@ namespace Motor3D_Educativo_P2
         {
             // Añade un cubo por defecto en una posición ligeramente aleatoria o fija
             var m = MeshFactory.CrearCubo(100);
-            m.Position = new Math3D.Vector3D(0, 0, 0); // O random
+            m.Nombre = GenerarNombreUnico("Cubo");
+            m.Position = new Math3D.Vector3D(0, 0, 0);
             escena.Modelos.Add(m);
+            ActualizarListaObjetos();
             SeleccionarModelo(m);
         }
 
@@ -127,6 +231,7 @@ namespace Motor3D_Educativo_P2
                 escena.Modelos.Remove(modeloSeleccionado);
                 if (escena.Modelos.Count > 0) SeleccionarModelo(escena.Modelos[escena.Modelos.Count - 1]);
                 else SeleccionarModelo(null);
+                ActualizarListaObjetos();
             }
         }
 
@@ -143,7 +248,7 @@ namespace Motor3D_Educativo_P2
         {
             if (modeloSeleccionado == null) return;
             
-            // Guardar transformaciones actuales
+            // Guardar transformaciones actuales y nombre base
             var pos = modeloSeleccionado.Position;
             var rot = modeloSeleccionado.Rotation;
             var scl = modeloSeleccionado.Scale;
@@ -151,15 +256,20 @@ namespace Motor3D_Educativo_P2
             figuraIndice++; if (figuraIndice > 4) figuraIndice = 0;
             
             Modelo3D nuevoModelo = null;
+            string tipoNovo = "";
+            
             switch (figuraIndice)
             {
-                case 0: nuevoModelo = MeshFactory.CrearCubo(100); break;
-                case 1: nuevoModelo = MeshFactory.CrearPiramide(100, 150); break;
-                case 2: nuevoModelo = MeshFactory.CrearCilindro(60, 150, 16); break;
-                case 3: nuevoModelo = MeshFactory.CrearCono(60, 150, 16); break;
-                case 4: nuevoModelo = MeshFactory.CrearEsfera(80, 12, 12); break;
+                case 0: nuevoModelo = MeshFactory.CrearCubo(100); tipoNovo = "Cubo"; break;
+                case 1: nuevoModelo = MeshFactory.CrearPiramide(100, 150); tipoNovo = "Pirámide"; break;
+                case 2: nuevoModelo = MeshFactory.CrearCilindro(60, 150, 16); tipoNovo = "Cilindro"; break;
+                case 3: nuevoModelo = MeshFactory.CrearCono(60, 150, 16); tipoNovo = "Cono"; break;
+                case 4: nuevoModelo = MeshFactory.CrearEsfera(80, 12, 12); tipoNovo = "Esfera"; break;
             }
 
+            // Asignar nuevo nombre único
+            nuevoModelo.Nombre = GenerarNombreUnico(tipoNovo);
+            
             // Restaurar transformaciones
             nuevoModelo.Position = pos;
             nuevoModelo.Rotation = rot;
@@ -173,6 +283,8 @@ namespace Motor3D_Educativo_P2
                 escena.Modelos[index] = nuevoModelo;
                 modeloSeleccionado = nuevoModelo;
             }
+            
+            ActualizarListaObjetos();
             pictureBox1.Invalidate();
         }
 

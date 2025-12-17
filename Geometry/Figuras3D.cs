@@ -9,6 +9,7 @@ namespace Motor3D_Educativo_P2
     // Clase base para objetos 3D
     public class Modelo3D
     {
+        public string Nombre { get; set; } = "Objeto"; // Nombre para mostrar en la lista
         public List<Math3D.Face> Faces = new List<Math3D.Face>();
         public Math3D.Vector3D Position = new Math3D.Vector3D(0, 0, 0);
         public Math3D.Vector3D Rotation = new Math3D.Vector3D(0, 0, 0);
