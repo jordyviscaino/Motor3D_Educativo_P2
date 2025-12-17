@@ -52,6 +52,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Core\RenderMode.cs" />
     <Compile Include="Geometry\Camara.cs" />
     <Compile Include="Core\Mesh.cs" />
     <Compile Include="Core\Transform.cs" />
@@ -65,6 +66,7 @@
     <Compile Include="Geometry\Figuras3D.cs" />
     <Compile Include="Geometry\Math3D.cs" />
     <Compile Include="Geometry\MeshFactory.cs" />
+    <Compile Include="Core\Material.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <EmbeddedResource Include="Form1.resx">

@@ -1,4 +1,5 @@
 ﻿using Motor3D_Educativo_P2.Geometry;
+using Motor3D_Educativo_P2.Core;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -14,17 +15,26 @@ namespace Motor3D_Educativo_P2
         public Math3D.Vector3D Rotation = new Math3D.Vector3D(0, 0, 0);
         public Math3D.Vector3D Scale = new Math3D.Vector3D(1, 1, 1);
 
+        // Material opcional para el modelo
+        public Material Material = new Material(Color.LightGray);
+
+        // Render mode control
+        public RenderMode CurrentRenderMode = RenderMode.Lit;
+
         // --- MÉTODO DRAW CORREGIDO ---
         public void Draw(Graphics g, Point viewCenter, Camara cam)
         {
             if (Faces.Count == 0) return;
+
+            // Luz (dirección en espacio mundo) - vector direccional
+            Math3D.Vector3D lightDir = Normalize(new Math3D.Vector3D(0, -1, -1));
 
             // Ordenamiento (Z-Sorting) para que las caras lejanas se dibujen primero
             var sortedFaces = Faces.OrderByDescending(f => {
                 var c = f.Center;
                 // Transformamos el centro para saber su profundidad real
                 var worldPos = ApplyTransform(c, Position, Rotation, Scale);
-                // Distancia a la cámara
+                // Distancia a la cámara (podría ser sin sqrt para optimización)
                 return Math.Sqrt(Math.Pow(worldPos.x - cam.Position.x, 2) +
                                  Math.Pow(worldPos.y - cam.Position.y, 2) +
                                  Math.Pow(worldPos.z - cam.Position.z, 2));
@@ -35,43 +45,133 @@ namespace Motor3D_Educativo_P2
                 face.Corners2D = new PointF[face.Corners3D.Length];
                 bool isVisible = true;
 
+                // Transformar todos los puntos al espacio mundo primero (para normal e iluminación)
+                Math3D.Vector3D[] worldPoints = new Math3D.Vector3D[face.Corners3D.Length];
                 for (int i = 0; i < face.Corners3D.Length; i++)
                 {
-                    // 1. Transformación de Modelo (Local -> Mundo)
-                    Math3D.Vector3D worldPoint = ApplyTransform(face.Corners3D[i], Position, Rotation, Scale);
-
-                    // 2. Transformación de Cámara (Mundo -> Vista)
-                    // Mover el punto en dirección opuesta a la cámara
-                    Math3D.Vector3D viewPoint = new Math3D.Vector3D(
-                        worldPoint.x - cam.Position.x,
-                        worldPoint.y - cam.Position.y,
-                        worldPoint.z - cam.Position.z
-                    );
-
-                    // Rotar el punto alrededor de la cámara (Orbitar)
-                    viewPoint = RotatePointHelper(viewPoint, -cam.Rotation.x, -cam.Rotation.y, 0);
-
-                    // 3. Proyección (Vista -> Pantalla 2D)
-                    float zoom = 600f;
-
-                    // Si el punto está detrás de la cámara (Z > -1), no se dibuja
-                    if (viewPoint.z > -1) { isVisible = false; break; }
-
-                    float zDepth = -viewPoint.z; // Invertimos Z para profundidad positiva
-                    float x2d = (viewPoint.x * zoom) / zDepth + viewCenter.X;
-                    float y2d = (-viewPoint.y * zoom) / zDepth + viewCenter.Y;
-
-                    face.Corners2D[i] = new PointF(x2d, y2d);
+                    worldPoints[i] = ApplyTransform(face.Corners3D[i], Position, Rotation, Scale);
                 }
 
-                if (isVisible && face.Corners2D.Length >= 3)
+                // Calcular normal de la cara (usando los primeros 3 vértices)
+                Math3D.Vector3D faceNormal = new Math3D.Vector3D(0, 0, 0);
+                if (worldPoints.Length >= 3)
                 {
-                    using (SolidBrush brush = new SolidBrush(Color.FromArgb(200, face.Color)))
-                    {
-                        g.FillPolygon(brush, face.Corners2D);
-                    }
-                    g.DrawPolygon(Pens.Black, face.Corners2D);
+                    var a = worldPoints[0];
+                    var b = worldPoints[1];
+                    var c = worldPoints[2];
+                    faceNormal = Normalize(Cross(Subtract(b, a), Subtract(c, a)));
                 }
+
+                // --- Backface culling (optimización) ---
+                // Calcular centro de la cara en espacio mundo y la dirección desde la cara hacia la cámara
+                Math3D.Vector3D worldCenter = ApplyTransform(face.Center, Position, Rotation, Scale);
+                Math3D.Vector3D toCamera = Normalize(Subtract(cam.Position, worldCenter));
+                float facing = Dot(faceNormal, toCamera);
+                // Si facing <= 0 significa que la cara está orientada lejos de la cámara -> cull
+                if (facing <= 0f) continue;
+
+                // Cálculo de intensidad (Ley de Lambert)
+                // Usamos -lightDir si lightDir apunta desde la luz hacia la escena
+                float intensity = Dot(faceNormal, new Math3D.Vector3D(-lightDir.x, -lightDir.y, -lightDir.z));
+                intensity = Math.Max(0f, intensity);
+
+                // Aplicar sombreado multiplicando el color de la cara por la intensidad
+                Color baseColor = face.Color;
+                // Preferir color del material del modelo si existe
+                Color materialColor = (Material != null) ? Material.DiffuseColor : baseColor;
+
+                int r = (int)(materialColor.R * intensity);
+                int gcol = (int)(materialColor.G * intensity);
+                int bcol = (int)(materialColor.B * intensity);
+                r = Math.Max(0, Math.Min(255, r));
+                gcol = Math.Max(0, Math.Min(255, gcol));
+                bcol = Math.Max(0, Math.Min(255, bcol));
+                Color shaded = Color.FromArgb(200, r, gcol, bcol);
+
+                // Choose drawing behavior based on RenderMode
+                switch (CurrentRenderMode)
+                {
+                    case RenderMode.Wireframe:
+                        DrawWireframe(g, face, worldPoints, cam, ref isVisible, viewCenter);
+                        break;
+
+                    case RenderMode.Solid:
+                        DrawSolid(g, face, worldPoints, cam, ref isVisible, viewCenter, materialColor);
+                        break;
+
+                    case RenderMode.Lit:
+                    default:
+                        DrawLit(g, face, worldPoints, cam, ref isVisible, viewCenter, shaded);
+                        break;
+                }
+            }
+        }
+
+        // Wireframe: dibuja solo aristas
+        private void DrawWireframe(Graphics g, Math3D.Face face, Math3D.Vector3D[] worldPoints, Camara cam, ref bool isVisible, Point viewCenter)
+        {
+            PointF[] pts = new PointF[worldPoints.Length];
+            for (int i = 0; i < worldPoints.Length; i++)
+            {
+                Math3D.Vector3D viewPoint = new Math3D.Vector3D(
+                    worldPoints[i].x - cam.Position.x,
+                    worldPoints[i].y - cam.Position.y,
+                    worldPoints[i].z - cam.Position.z);
+                viewPoint = RotatePointHelper(viewPoint, -cam.Rotation.x, -cam.Rotation.y, 0);
+                if (viewPoint.z > -1) { isVisible = false; break; }
+                float zDepth = -viewPoint.z;
+                pts[i] = new PointF((viewPoint.x * 600f) / zDepth + viewCenter.X, (-viewPoint.y * 600f) / zDepth + viewCenter.Y);
+            }
+            if (isVisible) g.DrawPolygon(Pens.Black, pts);
+        }
+
+        // Solid: rellena con color sólido (sin iluminación)
+        private void DrawSolid(Graphics g, Math3D.Face face, Math3D.Vector3D[] worldPoints, Camara cam, ref bool isVisible, Point viewCenter, Color color)
+        {
+            PointF[] pts = new PointF[worldPoints.Length];
+            for (int i = 0; i < worldPoints.Length; i++)
+            {
+                Math3D.Vector3D viewPoint = new Math3D.Vector3D(
+                    worldPoints[i].x - cam.Position.x,
+                    worldPoints[i].y - cam.Position.y,
+                    worldPoints[i].z - cam.Position.z);
+                viewPoint = RotatePointHelper(viewPoint, -cam.Rotation.x, -cam.Rotation.y, 0);
+                if (viewPoint.z > -1) { isVisible = false; break; }
+                float zDepth = -viewPoint.z;
+                pts[i] = new PointF((viewPoint.x * 600f) / zDepth + viewCenter.X, (-viewPoint.y * 600f) / zDepth + viewCenter.Y);
+            }
+            if (isVisible && pts.Length >= 3)
+            {
+                using (SolidBrush brush = new SolidBrush(Color.FromArgb(200, color)))
+                {
+                    g.FillPolygon(brush, pts);
+                }
+                g.DrawPolygon(Pens.Black, pts);
+            }
+        }
+
+        // Lit: usa color sombreado calculado por iluminación
+        private void DrawLit(Graphics g, Math3D.Face face, Math3D.Vector3D[] worldPoints, Camara cam, ref bool isVisible, Point viewCenter, Color shaded)
+        {
+            PointF[] pts = new PointF[worldPoints.Length];
+            for (int i = 0; i < worldPoints.Length; i++)
+            {
+                Math3D.Vector3D viewPoint = new Math3D.Vector3D(
+                    worldPoints[i].x - cam.Position.x,
+                    worldPoints[i].y - cam.Position.y,
+                    worldPoints[i].z - cam.Position.z);
+                viewPoint = RotatePointHelper(viewPoint, -cam.Rotation.x, -cam.Rotation.y, 0);
+                if (viewPoint.z > -1) { isVisible = false; break; }
+                float zDepth = -viewPoint.z;
+                pts[i] = new PointF((viewPoint.x * 600f) / zDepth + viewCenter.X, (-viewPoint.y * 600f) / zDepth + viewCenter.Y);
+            }
+            if (isVisible && pts.Length >= 3)
+            {
+                using (SolidBrush brush = new SolidBrush(shaded))
+                {
+                    g.FillPolygon(brush, pts);
+                }
+                g.DrawPolygon(Pens.Black, pts);
             }
         }
 
@@ -104,6 +204,37 @@ namespace Motor3D_Educativo_P2
             if (rz != 0) r = Math3D.RotateZ(r, rz);
             return r;
         }
+
+        // Vector helpers para iluminación
+        private static Math3D.Vector3D Subtract(Math3D.Vector3D a, Math3D.Vector3D b)
+        {
+            return new Math3D.Vector3D(a.x - b.x, a.y - b.y, a.z - b.z);
+        }
+
+        private static Math3D.Vector3D Cross(Math3D.Vector3D a, Math3D.Vector3D b)
+        {
+            return new Math3D.Vector3D(
+                a.y * b.z - a.z * b.y,
+                a.z * b.x - a.x * b.z,
+                a.x * b.y - a.y * b.x);
+        }
+
+        private static float Dot(Math3D.Vector3D a, Math3D.Vector3D b)
+        {
+            return a.x * b.x + a.y * b.y + a.z * b.z;
+        }
+
+        private static float Length(Math3D.Vector3D a)
+        {
+            return (float)Math.Sqrt(a.x * a.x + a.y * a.y + a.z * a.z);
+        }
+
+        private static Math3D.Vector3D Normalize(Math3D.Vector3D a)
+        {
+            float len = Length(a);
+            if (len == 0) return new Math3D.Vector3D(0, 0, 0);
+            return new Math3D.Vector3D(a.x / len, a.y / len, a.z / len);
+        }
     }
 
     // --- MESH FACTORY (Sin cambios, solo para contexto) ---
@@ -116,7 +247,18 @@ namespace Motor3D_Educativo_P2
             f.Color = color;
             if (d == null) f.Corners3D = new Math3D.Vector3D[] { a, b, c };
             else f.Corners3D = new Math3D.Vector3D[] { a, b, c, d };
-            f.Center = a; // Centro aproximado
+
+            // Calcular centro promedio de los vértices
+            float cx = 0, cy = 0, cz = 0;
+            for (int i = 0; i < f.Corners3D.Length; i++)
+            {
+                cx += f.Corners3D[i].x;
+                cy += f.Corners3D[i].y;
+                cz += f.Corners3D[i].z;
+            }
+            int count = f.Corners3D.Length;
+            f.Center = new Math3D.Vector3D(cx / count, cy / count, cz / count);
+
             return f;
         }
 
@@ -199,7 +341,7 @@ namespace Motor3D_Educativo_P2
             {
                 double phi1 = lat * Math.PI / rings;
                 double phi2 = (lat + 1) * Math.PI / rings;
-                for (int lon = 0; lon < seg; lon++)
+                for (sbyte lon = 0; lon < seg; lon++)
                 {
                     double th1 = lon * 2 * Math.PI / seg;
                     double th2 = (lon + 1) * 2 * Math.PI / seg;
