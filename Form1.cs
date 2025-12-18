@@ -36,6 +36,11 @@ namespace Motor3D_Educativo_P2
         private Button btnLightColor;
         private TrackBar trackLightIntensity;
 
+        // Textura seleccionada persistente
+        private ComboBox cbTextureSelector;
+        private string selectedTextureName = null;
+        private Bitmap selectedTextureBitmap = null;
+
         public Form1()
         {
             InitializeComponent();
