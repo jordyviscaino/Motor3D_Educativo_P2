@@ -13,6 +13,10 @@ namespace Motor3D_Educativo_P2
         public Color SpecularColor { get; set; }
         public float Shininess { get; set; }
 
+        // Textura opcional
+        public Bitmap Texture { get; set; }
+        public bool HasTexture => Texture != null;
+
         public Material(Color diffuseColor)
         {
             DiffuseColor = diffuseColor;

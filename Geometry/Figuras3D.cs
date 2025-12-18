@@ -26,8 +26,8 @@ namespace Motor3D_Educativo_P2
         {
             if (Faces.Count == 0) return;
 
-            // Luz (dirección en espacio mundo) - vector direccional
-            Math3D.Vector3D lightDir = Normalize(new Math3D.Vector3D(0, -1, -1));
+            // Luz (dirección en espacio mundo) - vector direccional desde la escena
+            Math3D.Vector3D lightDir = Normalize(Scene.LightDirection);
 
             // Ordenamiento (Z-Sorting) para que las caras lejanas se dibujen primero
             var sortedFaces = Faces.OrderByDescending(f => {
@@ -80,9 +80,43 @@ namespace Motor3D_Educativo_P2
                 // Preferir color del material del modelo si existe
                 Color materialColor = (Material != null) ? Material.DiffuseColor : baseColor;
 
-                int r = (int)(materialColor.R * intensity);
-                int gcol = (int)(materialColor.G * intensity);
-                int bcol = (int)(materialColor.B * intensity);
+                // Soporte de texturas: si el material tiene textura y la cara tiene UVs, samplear
+                Color sampledColor = materialColor;
+                if (Material != null && Material.HasTexture && face.UVs != null && face.UVs.Length == face.Corners3D.Length)
+                {
+                    try
+                    {
+                        // Promediar UVs de la cara y samplear la textura en ese punto (mapeo básico)
+                        float su = 0, sv = 0;
+                        for (int i = 0; i < face.UVs.Length; i++) { su += face.UVs[i].X; sv += face.UVs[i].Y; }
+                        su /= face.UVs.Length; sv /= face.UVs.Length;
+
+                        Bitmap tex = Material.Texture;
+                        if (tex != null && tex.Width > 0 && tex.Height > 0)
+                        {
+                            int tx = (int)(Math.Min(1f, Math.Max(0f, su)) * (tex.Width - 1));
+                            int ty = (int)((1f - Math.Min(1f, Math.Max(0f, sv))) * (tex.Height - 1)); // invertir V
+                            Color c = tex.GetPixel(tx, ty);
+                            sampledColor = c;
+                        }
+                    }
+                    catch
+                    {
+                        sampledColor = materialColor; // fallback
+                    }
+                }
+
+                // Aplicar color de luz y intensidad (combinación simple Lambert + ambient)
+                float ambient = 0.1f;
+                float lightFactor = ambient + intensity * Scene.LightIntensity;
+                // Light color normalizado
+                float lR = Scene.LightColor.R / 255f;
+                float lG = Scene.LightColor.G / 255f;
+                float lB = Scene.LightColor.B / 255f;
+
+                int r = (int)(sampledColor.R * lightFactor * lR);
+                int gcol = (int)(sampledColor.G * lightFactor * lG);
+                int bcol = (int)(sampledColor.B * lightFactor * lB);
                 r = Math.Max(0, Math.Min(255, r));
                 gcol = Math.Max(0, Math.Min(255, gcol));
                 bcol = Math.Max(0, Math.Min(255, bcol));
@@ -96,7 +130,7 @@ namespace Motor3D_Educativo_P2
                         break;
 
                     case RenderMode.Solid:
-                        DrawSolid(g, face, worldPoints, cam, ref isVisible, viewCenter, materialColor);
+                        DrawSolid(g, face, worldPoints, cam, ref isVisible, viewCenter, sampledColor);
                         break;
 
                     case RenderMode.Lit:
@@ -258,6 +292,22 @@ namespace Motor3D_Educativo_P2
             }
             int count = f.Corners3D.Length;
             f.Center = new Math3D.Vector3D(cx / count, cy / count, cz / count);
+
+            // Asignar UVs básicas (triángulo o cuadrilátero)
+            if (f.Corners3D.Length == 3)
+            {
+                f.UVs = new System.Drawing.PointF[] { new PointF(0f, 0f), new PointF(1f, 0f), new PointF(0.5f, 1f) };
+            }
+            else if (f.Corners3D.Length == 4)
+            {
+                f.UVs = new System.Drawing.PointF[] { new PointF(0f, 0f), new PointF(1f, 0f), new PointF(1f, 1f), new PointF(0f, 1f) };
+            }
+            else
+            {
+                // Fallback: distribuir UVs en 0..1
+                f.UVs = new PointF[f.Corners3D.Length];
+                for (int i = 0; i < f.UVs.Length; i++) f.UVs[i] = new PointF((float)i / (f.UVs.Length - 1), 0f);
+            }
 
             return f;
         }

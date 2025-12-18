@@ -27,6 +27,8 @@ namespace Motor3D_Educativo_P2.Geometry
             public PointF[] Corners2D;   // Los puntos proyectados en pantalla
             public Vector3D Center;      // Para ordenar qué se dibuja primero
             public Color Color;          // Color de la cara
+            // UVs para mapeado de texturas (valores en 0..1 correspondentes a la imagen)
+            public PointF[] UVs;
         }
 
         // --- TU RESPONSABILIDAD: Matrices de Transformación (Simplificadas) ---

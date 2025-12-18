@@ -15,6 +15,10 @@ namespace Motor3D_Educativo_P2
         bool isMouseDown = false;
         int figuraIndice = 0;
 
+        // Controles de luz
+        private Button btnLightColor;
+        private TrackBar trackLightIntensity;
+
         public Form1()
         {
             InitializeComponent();
@@ -43,6 +47,53 @@ namespace Motor3D_Educativo_P2
             Button btn = new Button(); btn.Text = "Cambiar Figura"; btn.Height = 40; btn.Width = 200;
             btn.Click += (s, ev) => CambiarFigura();
             flowLayoutPanel1.Controls.Add(btn);
+
+            // Botón para color de luz
+            btnLightColor = new Button(); btnLightColor.Text = "Color Claro"; btnLightColor.Width = 200; btnLightColor.Height = 40;
+            btnLightColor.Click += (s, ev2) => {
+                using (ColorDialog cd = new ColorDialog())
+                {
+                    if (cd.ShowDialog() == DialogResult.OK)
+                    {
+                        Core.Scene.LightColor = cd.Color;
+                        pictureBox1.Invalidate();
+                    }
+                }
+            };
+            flowLayoutPanel1.Controls.Add(btnLightColor);
+
+            // Slider de intensidad de luz
+            Label lblLI = new Label(); lblLI.Text = "Intensidad de la Luz"; lblLI.AutoSize = true; lblLI.ForeColor = Color.Black;
+            flowLayoutPanel1.Controls.Add(lblLI);
+            trackLightIntensity = new TrackBar(); trackLightIntensity.Minimum = 0; trackLightIntensity.Maximum = 200; trackLightIntensity.Value = 100; trackLightIntensity.TickStyle = TickStyle.None; trackLightIntensity.Width = 200;
+            trackLightIntensity.Scroll += (s, ev3) => { Core.Scene.LightIntensity = trackLightIntensity.Value / 100f; pictureBox1.Invalidate(); };
+            flowLayoutPanel1.Controls.Add(trackLightIntensity);
+
+            // Botón para cargar textura
+            Button btnLoadTex = new Button(); btnLoadTex.Text = "Cargar Textura"; btnLoadTex.Width = 200; btnLoadTex.Height = 40;
+            btnLoadTex.Click += (s, ev4) => {
+                using (OpenFileDialog of = new OpenFileDialog())
+                {
+                    of.Filter = "Imágenes|*.png;*.jpg;*.jpeg;*.bmp";
+                    if (of.ShowDialog() == DialogResult.OK)
+                    {
+                        try
+                        {
+                            var bmp = (Bitmap)Bitmap.FromFile(of.FileName);
+                            if (modeloActual != null && modeloActual.Material != null)
+                            {
+                                modeloActual.Material.Texture = bmp;
+                            }
+                            pictureBox1.Invalidate();
+                        }
+                        catch (Exception ex)
+                        {
+                            MessageBox.Show("Error cargando textura: " + ex.Message);
+                        }
+                    }
+                }
+            };
+            flowLayoutPanel1.Controls.Add(btnLoadTex);
 
             GenerarSliders("TRASLACIÓN", -200, 200, 0, (c, v) => {
                 if (modeloActual == null) return;

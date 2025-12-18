@@ -53,6 +53,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Core\RenderMode.cs" />
+    <Compile Include="Core\Scene.cs" />
     <Compile Include="Geometry\Camara.cs" />
     <Compile Include="Core\Mesh.cs" />
     <Compile Include="Core\Transform.cs" />
