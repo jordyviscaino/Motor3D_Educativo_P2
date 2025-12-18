@@ -10,10 +10,12 @@ namespace Motor3D_Educativo_P2
     // Clase base para objetos 3D
     public class Modelo3D
     {
+        public string Nombre { get; set; } = "Objeto"; // Nombre para mostrar en la lista
         public List<Math3D.Face> Faces = new List<Math3D.Face>();
         public Math3D.Vector3D Position = new Math3D.Vector3D(0, 0, 0);
         public Math3D.Vector3D Rotation = new Math3D.Vector3D(0, 0, 0);
         public Math3D.Vector3D Scale = new Math3D.Vector3D(1, 1, 1);
+        public bool Selected = false; // Propiedad para indicar si el modelo está seleccionado
 
         // Material opcional para el modelo
         public Material Material = new Material(Color.LightGray);
@@ -323,6 +325,8 @@ namespace Motor3D_Educativo_P2
 
                         outBmp.SetPixel(px - minX, py - minY, finalC);
                     }
+                    // Dibujar borde: Rojo si está seleccionado, Negro si no
+                    g.DrawPolygon(Selected ? Pens.Red : Pens.Black, face.Corners2D);
                 }
 
                 // Dibujar la región resultante en el contexto original
@@ -391,6 +395,28 @@ namespace Motor3D_Educativo_P2
             float len = Length(a);
             if (len == 0) return new Math3D.Vector3D(0, 0, 0);
             return new Math3D.Vector3D(a.x / len, a.y / len, a.z / len);
+        }
+    }
+
+    // Clase para manejar la escena con múltiples modelos
+    public class Escena
+    {
+        public List<Modelo3D> Modelos = new List<Modelo3D>();
+
+        public void Draw(Graphics g, Point viewCenter, Camara cam)
+        {
+            // Ordenar modelos por distancia a la cámara para un dibujado básico correcto (Painter's Algorithm a nivel de objeto)
+            var sortedModels = Modelos.OrderByDescending(m => {
+                // Distancia desde el centro del modelo a la cámara
+                return Math.Sqrt(Math.Pow(m.Position.x - cam.Position.x, 2) +
+                                 Math.Pow(m.Position.y - cam.Position.y, 2) +
+                                 Math.Pow(m.Position.z - cam.Position.z, 2));
+            }).ToList();
+
+            foreach (var modelo in sortedModels)
+            {
+                modelo.Draw(g, viewCenter, cam);
+            }
         }
     }
 
