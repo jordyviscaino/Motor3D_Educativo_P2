@@ -52,6 +52,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Core\ProceduralTextures.cs" />
     <Compile Include="Core\RenderMode.cs" />
     <Compile Include="Core\Scene.cs" />
     <Compile Include="Geometry\Camara.cs" />

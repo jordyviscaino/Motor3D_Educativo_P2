@@ -1,7 +1,9 @@
 ﻿using Motor3D_Educativo_P2.Geometry;
+using Motor3D_Educativo_P2.Core;
 using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.IO;
 using System.Windows.Forms;
 
 namespace Motor3D_Educativo_P2
@@ -18,6 +20,11 @@ namespace Motor3D_Educativo_P2
         // Controles de luz
         private Button btnLightColor;
         private TrackBar trackLightIntensity;
+
+        // Textura seleccionada persistente
+        private ComboBox cbTextureSelector;
+        private string selectedTextureName = null;
+        private Bitmap selectedTextureBitmap = null;
 
         public Form1()
         {
@@ -49,7 +56,7 @@ namespace Motor3D_Educativo_P2
             flowLayoutPanel1.Controls.Add(btn);
 
             // Botón para color de luz
-            btnLightColor = new Button(); btnLightColor.Text = "Color Claro"; btnLightColor.Width = 200; btnLightColor.Height = 40;
+            btnLightColor = new Button(); btnLightColor.Text = "Light Color"; btnLightColor.Width = 200; btnLightColor.Height = 40;
             btnLightColor.Click += (s, ev2) => {
                 using (ColorDialog cd = new ColorDialog())
                 {
@@ -63,37 +70,50 @@ namespace Motor3D_Educativo_P2
             flowLayoutPanel1.Controls.Add(btnLightColor);
 
             // Slider de intensidad de luz
-            Label lblLI = new Label(); lblLI.Text = "Intensidad de la Luz"; lblLI.AutoSize = true; lblLI.ForeColor = Color.Black;
+            Label lblLI = new Label(); lblLI.Text = "Light Intensity"; lblLI.AutoSize = true; lblLI.ForeColor = Color.Black;
             flowLayoutPanel1.Controls.Add(lblLI);
             trackLightIntensity = new TrackBar(); trackLightIntensity.Minimum = 0; trackLightIntensity.Maximum = 200; trackLightIntensity.Value = 100; trackLightIntensity.TickStyle = TickStyle.None; trackLightIntensity.Width = 200;
             trackLightIntensity.Scroll += (s, ev3) => { Core.Scene.LightIntensity = trackLightIntensity.Value / 100f; pictureBox1.Invalidate(); };
             flowLayoutPanel1.Controls.Add(trackLightIntensity);
 
-            // Botón para cargar textura
-            Button btnLoadTex = new Button(); btnLoadTex.Text = "Cargar Textura"; btnLoadTex.Width = 200; btnLoadTex.Height = 40;
-            btnLoadTex.Click += (s, ev4) => {
-                using (OpenFileDialog of = new OpenFileDialog())
+            // Selector de texturas predefinidas
+            Label lblTex = new Label(); lblTex.Text = "Textura"; lblTex.AutoSize = true; lblTex.ForeColor = Color.Black;
+            flowLayoutPanel1.Controls.Add(lblTex);
+            cbTextureSelector = new ComboBox(); cbTextureSelector.Width = 200; cbTextureSelector.DropDownStyle = ComboBoxStyle.DropDownList;
+            cbTextureSelector.Items.AddRange(new object[] { "Ninguna", "Madera", "Metal", "Piedra", "Concreto" });
+            cbTextureSelector.SelectedIndex = 0;
+            cbTextureSelector.SelectedIndexChanged += (s, ev4) => {
+                string sel = cbTextureSelector.SelectedItem as string;
+                if (string.IsNullOrEmpty(sel) || sel == "Ninguna")
                 {
-                    of.Filter = "Imágenes|*.png;*.jpg;*.jpeg;*.bmp";
-                    if (of.ShowDialog() == DialogResult.OK)
+                    selectedTextureName = null;
+                    selectedTextureBitmap = null;
+                    if (modeloActual != null && modeloActual.Material != null) modeloActual.Material.Texture = null;
+                    pictureBox1.Invalidate();
+                    return;
+                }
+
+                selectedTextureName = sel;
+                // Generar textura procedimentalmente
+                string key = sel.ToLowerInvariant();
+                Bitmap bmp = ProceduralTextures.Generate(key, 512);
+                if (bmp == null)
+                {
+                    MessageBox.Show($"No se pudo generar la textura: {sel}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    selectedTextureBitmap = null;
+                    if (modeloActual != null && modeloActual.Material != null) modeloActual.Material.Texture = null;
+                }
+                else
+                {
+                    selectedTextureBitmap = bmp;
+                    if (modeloActual != null && modeloActual.Material != null)
                     {
-                        try
-                        {
-                            var bmp = (Bitmap)Bitmap.FromFile(of.FileName);
-                            if (modeloActual != null && modeloActual.Material != null)
-                            {
-                                modeloActual.Material.Texture = bmp;
-                            }
-                            pictureBox1.Invalidate();
-                        }
-                        catch (Exception ex)
-                        {
-                            MessageBox.Show("Error cargando textura: " + ex.Message);
-                        }
+                        modeloActual.Material.Texture = selectedTextureBitmap;
                     }
                 }
+                pictureBox1.Invalidate();
             };
-            flowLayoutPanel1.Controls.Add(btnLoadTex);
+            flowLayoutPanel1.Controls.Add(cbTextureSelector);
 
             GenerarSliders("TRASLACIÓN", -200, 200, 0, (c, v) => {
                 if (modeloActual == null) return;
@@ -111,6 +131,12 @@ namespace Motor3D_Educativo_P2
                 if (c == 'X') modeloActual.Scale.x = s; if (c == 'Y') modeloActual.Scale.y = s; if (c == 'Z') modeloActual.Scale.z = s;
                 pictureBox1.Invalidate();
             });
+
+            // Si ya había una textura seleccionada (inicio), intentar aplicarla
+            if (selectedTextureBitmap != null && modeloActual != null && modeloActual.Material != null)
+            {
+                modeloActual.Material.Texture = selectedTextureBitmap;
+            }
         }
 
         // Helper para UI (simplificado)
@@ -140,6 +166,13 @@ namespace Motor3D_Educativo_P2
                 case 4: modeloActual = MeshFactory.CrearEsfera(80, 12, 12); break;
             }
             modeloActual.Rotation = new Math3D.Vector3D(0, 0, 0);
+
+            // Aplicar textura seleccionada al nuevo modelo si existe
+            if (selectedTextureBitmap != null && modeloActual != null && modeloActual.Material != null)
+            {
+                modeloActual.Material.Texture = selectedTextureBitmap;
+            }
+
             pictureBox1.Invalidate();
         }
 
