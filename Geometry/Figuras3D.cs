@@ -62,6 +62,14 @@ namespace Motor3D_Educativo_P2
                     var b = worldPoints[1];
                     var c = worldPoints[2];
                     faceNormal = Normalize(Cross(Subtract(b, a), Subtract(c, a)));
+
+                    using (SolidBrush brush = new SolidBrush(Color.FromArgb(200, face.Color)))
+                    {
+                        g.FillPolygon(brush, face.Corners2D);
+                    }
+                    // Dibujar borde: Rojo si está seleccionado, Negro si no
+                    g.DrawPolygon(Selected ? Pens.Red : Pens.Black, face.Corners2D);
+
                 }
 
                 // --- Backface culling (optimización) ---
@@ -325,8 +333,6 @@ namespace Motor3D_Educativo_P2
 
                         outBmp.SetPixel(px - minX, py - minY, finalC);
                     }
-                    // Dibujar borde: Rojo si está seleccionado, Negro si no
-                    g.DrawPolygon(Selected ? Pens.Red : Pens.Black, face.Corners2D);
                 }
 
                 // Dibujar la región resultante en el contexto original

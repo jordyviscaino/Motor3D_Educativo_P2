@@ -1,125 +1,259 @@
 ﻿using Motor3D_Educativo_P2.Geometry;
+using Motor3D_Educativo_P2.Core;
 using System;
-using System.Collections.Generic; // Added for List<> 
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
-using System.Linq; // Necesario para OrderByDescending
+using System.Linq;
 using System.Windows.Forms;
 
 namespace Motor3D_Educativo_P2
 {
     public partial class Form1 : Form
     {
-        Escena escena = new Escena(); // Reemplaza modeloActual único por una escena
-        Modelo3D modeloSeleccionado; // Referencia al modelo actualmente seleccionado para editar
-        Camara camara = new Camara(); // Instancia de la cámara
+        Escena escena = new Escena();
+        Modelo3D modeloSeleccionado;
+        Camara camara = new Camara();
         Point centroPantalla;
         Point lastMousePos;
         bool isMouseDown = false;
-        bool isDragging = false; // Para diferenciar entre clic y arrastre
+        bool isDragging = false;
         int figuraIndice = 0;
+
+        private Dictionary<string, int> contadoresObjetos = new Dictionary<string, int>
+        {
+            { "Cubo", 0 },
+            { "Pirámide", 0 },
+            { "Cilindro", 0 },
+            { "Cono", 0 },
+            { "Esfera", 0 }
+        };
+
+        private Dictionary<string, TrackBar> slidersTraslacion = new Dictionary<string, TrackBar>();
+        private Dictionary<string, TrackBar> slidersRotacion = new Dictionary<string, TrackBar>();
+        private Dictionary<string, TrackBar> slidersEscala = new Dictionary<string, TrackBar>();
+
+        private Button btnLightColor;
+        private TrackBar trackLightIntensity;
 
         public Form1()
         {
             InitializeComponent();
 
-            // Configuración vital para gráficos suaves
             this.DoubleBuffered = true;
 
-            // Habilitar captura de teclas para WASD
             this.KeyPreview = true;
             this.KeyDown += Form1_KeyDown;
 
-            // Eventos del Mouse
             pictureBox1.MouseDown += PictureBox1_MouseDown;
             pictureBox1.MouseUp += PictureBox1_MouseUp;
             pictureBox1.MouseMove += PictureBox1_MouseMove;
             pictureBox1.MouseWheel += PictureBox1_MouseWheel;
-            pictureBox1.MouseClick += PictureBox1_MouseClick; // Nuevo evento para selección
+            pictureBox1.MouseClick += PictureBox1_MouseClick;
         }
 
         private void Form1_Load(object sender, EventArgs e)
         {
-            // Cargar cubo por defecto y añadirlo a la escena
             var cuboInicial = MeshFactory.CrearCubo(100);
             cuboInicial.Nombre = GenerarNombreUnico("Cubo");
             escena.Modelos.Add(cuboInicial);
             ActualizarListaObjetos();
 
-            // -- GENERACIÓN DE UI --
+            // Mejora visual: tema oscuro consistente, fuente y espaciado
             flowLayoutPanel1.Controls.Clear();
-            
-            // Botón para añadir nueva figura
-            Button btnAdd = new Button(); 
-            btnAdd.Text = "Añadir Figura"; 
-            btnAdd.Height = 40; 
-            btnAdd.Width = 200;
-            btnAdd.BackColor = Color.FromArgb(60, 60, 60);
-            btnAdd.ForeColor = Color.White;
-            btnAdd.FlatStyle = FlatStyle.Flat;
-            btnAdd.FlatAppearance.BorderColor = Color.FromArgb(100, 100, 100);
+            flowLayoutPanel1.BackColor = Color.FromArgb(34, 34, 34);
+            flowLayoutPanel1.Padding = new Padding(12);
+            flowLayoutPanel1.FlowDirection = FlowDirection.TopDown;
+            flowLayoutPanel1.WrapContents = false;
+            flowLayoutPanel1.AutoScroll = true;
+
+            var header = new Label
+            {
+                Text = "Motor 3D — Herramientas",
+                AutoSize = false,
+                TextAlign = ContentAlignment.MiddleLeft,
+                Height = 28,
+                Width = 260,
+                ForeColor = Color.White,
+                Font = new Font("Segoe UI", 10F, FontStyle.Bold),
+                BackColor = Color.FromArgb(0, 0, 0, 0)
+            };
+            flowLayoutPanel1.Controls.Add(header);
+
+            // Grupo: Escena (añadir / eliminar / cambiar tipo)
+            var grpScene = new GroupBox
+            {
+                Text = "Escena",
+                Width = 280,
+                Height = 120,
+                ForeColor = Color.White,
+                BackColor = Color.FromArgb(37, 37, 37),
+                Font = new Font("Segoe UI", 9F, FontStyle.Regular)
+            };
+            var btnAdd = new Button { Text = "Añadir Figura", Width = 120, Height = 34, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(60, 60, 60), ForeColor = Color.White };
+            btnAdd.FlatAppearance.BorderColor = Color.FromArgb(90, 90, 90);
             btnAdd.Click += (s, ev) => AnadirFigura();
-            flowLayoutPanel1.Controls.Add(btnAdd);
 
-            // Botón para cambiar tipo de figura seleccionada (opcional, o para ciclar tipos en la nueva)
-            Button btnChange = new Button(); 
-            btnChange.Text = "Cambiar Tipo (Sel)"; 
-            btnChange.Height = 40; 
-            btnChange.Width = 200;
-            btnChange.BackColor = Color.FromArgb(60, 60, 60);
-            btnChange.ForeColor = Color.White;
-            btnChange.FlatStyle = FlatStyle.Flat;
-            btnChange.FlatAppearance.BorderColor = Color.FromArgb(100, 100, 100);
-            btnChange.Click += (s, ev) => CambiarTipoFiguraSeleccionada();
-            flowLayoutPanel1.Controls.Add(btnChange);
-
-            // Botón para eliminar figura seleccionada
-            Button btnDel = new Button(); 
-            btnDel.Text = "Eliminar Seleccionada"; 
-            btnDel.Height = 40; 
-            btnDel.Width = 200;
-            btnDel.BackColor = Color.FromArgb(80, 30, 30); // Rojo oscuro para eliminar
-            btnDel.ForeColor = Color.White;
-            btnDel.FlatStyle = FlatStyle.Flat;
+            var btnDel = new Button { Text = "Eliminar Seleccionada", Width = 150, Height = 34, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(85, 30, 30), ForeColor = Color.White };
             btnDel.FlatAppearance.BorderColor = Color.FromArgb(120, 50, 50);
             btnDel.Click += (s, ev) => EliminarFiguraSeleccionada();
-            flowLayoutPanel1.Controls.Add(btnDel);
 
-            GenerarSliders("TRASLACIÓN", -200, 200, 0, slidersTraslacion, (c, v) => {
+            var btnChange = new Button { Text = "Cambiar Tipo (Sel)", Width = 120, Height = 34, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(60, 60, 60), ForeColor = Color.White };
+            btnChange.FlatAppearance.BorderColor = Color.FromArgb(90, 90, 90);
+            btnChange.Click += (s, ev) => CambiarTipoFiguraSeleccionada();
+
+            // Layout simple dentro del groupbox
+            grpScene.Controls.Add(btnAdd);
+            grpScene.Controls.Add(btnChange);
+            grpScene.Controls.Add(btnDel);
+            btnAdd.Location = new Point(12, 22);
+            btnChange.Location = new Point(12, 62);
+            btnDel.Location = new Point(140, 22);
+            flowLayoutPanel1.Controls.Add(grpScene);
+
+            // Grupo: Iluminación
+            var grpLight = new GroupBox
+            {
+                Text = "Iluminación",
+                Width = 280,
+                Height = 120,
+                ForeColor = Color.White,
+                BackColor = Color.FromArgb(37, 37, 37),
+                Font = new Font("Segoe UI", 9F, FontStyle.Regular)
+            };
+
+            btnLightColor = new Button { Text = "Color de Luz...", Width = 120, Height = 34, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(60, 60, 60), ForeColor = Color.White };
+            btnLightColor.FlatAppearance.BorderColor = Color.FromArgb(90, 90, 90);
+            btnLightColor.Click += (s, ev2) =>
+            {
+                using (ColorDialog cd = new ColorDialog())
+                {
+                    if (cd.ShowDialog() == DialogResult.OK)
+                    {
+                        Scene.LightColor = cd.Color;
+                        pictureBox1.Invalidate();
+                    }
+                }
+            };
+
+            var lblLI = new Label { Text = "Intensidad", AutoSize = true, ForeColor = Color.White, Location = new Point(12, 64) };
+            trackLightIntensity = new TrackBar { Minimum = 0, Maximum = 200, Value = (int)(Scene.LightIntensity * 100), TickStyle = TickStyle.None, Width = 150, Location = new Point(90, 58) };
+            trackLightIntensity.Scroll += (s, ev3) => { Scene.LightIntensity = trackLightIntensity.Value / 100f; pictureBox1.Invalidate(); };
+
+            grpLight.Controls.Add(btnLightColor);
+            grpLight.Controls.Add(lblLI);
+            grpLight.Controls.Add(trackLightIntensity);
+            btnLightColor.Location = new Point(12, 22);
+            flowLayoutPanel1.Controls.Add(grpLight);
+
+            // Grupo: Texturas (un único botón consolidado)
+            var grpTex = new GroupBox
+            {
+                Text = "Textura",
+                Width = 280,
+                Height = 80,
+                ForeColor = Color.White,
+                BackColor = Color.FromArgb(37, 37, 37),
+                Font = new Font("Segoe UI", 9F, FontStyle.Regular)
+            };
+
+            var btnCargarTex = new Button { Text = "Cargar Textura...", Width = 240, Height = 36, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(60, 60, 60), ForeColor = Color.White, Location = new Point(12, 22) };
+            btnCargarTex.FlatAppearance.BorderColor = Color.FromArgb(90, 90, 90);
+            btnCargarTex.Click += (s, ev) =>
+            {
+                var bmp = PromptLoadTexture();
+                if (bmp != null)
+                {
+                    SetModelTexture(bmp);
+                    pictureBox1.Invalidate();
+                }
+            };
+            grpTex.Controls.Add(btnCargarTex);
+            flowLayoutPanel1.Controls.Add(grpTex);
+
+            // Grupo: Controles de cámara / movimiento (ordenados y con botones de acceso rápido)
+            var grpCam = new GroupBox
+            {
+                Text = "Controles Cámara",
+                Width = 280,
+                Height = 150,
+                ForeColor = Color.White,
+                BackColor = Color.FromArgb(37, 37, 37),
+                Font = new Font("Segoe UI", 9F, FontStyle.Regular)
+            };
+
+            var btnResetCam = new Button { Text = "Reset Cámara", Width = 120, Height = 30, Location = new Point(12, 22), FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(70, 70, 70), ForeColor = Color.White };
+            btnResetCam.FlatAppearance.BorderColor = Color.FromArgb(90, 90, 90);
+            btnResetCam.Click += (s, ev) =>
+            {
+                camara.Position = new Math3D.Vector3D(0, 0, -800);
+                camara.Rotation = new Math3D.Vector3D(0, 0, 0);
+                pictureBox1.Invalidate();
+            };
+
+            // Movimiento: adelante/atrás/izq/der/arriba/abajo
+            var btnFwd = new Button { Text = "Frente (W)", Width = 80, Height = 26, Location = new Point(12, 58), FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(60, 60, 60), ForeColor = Color.White };
+            var btnBack = new Button { Text = "Atrás (S)", Width = 80, Height = 26, Location = new Point(102, 58), FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(60, 60, 60), ForeColor = Color.White };
+            var btnLeft = new Button { Text = "Izq (A)", Width = 80, Height = 26, Location = new Point(12, 88), FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(60, 60, 60), ForeColor = Color.White };
+            var btnRight = new Button { Text = "Der (D)", Width = 80, Height = 26, Location = new Point(102, 88), FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(60, 60, 60), ForeColor = Color.White };
+            var btnUp = new Button { Text = "Subir (Q)", Width = 80, Height = 26, Location = new Point(192, 58), FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(60, 60, 60), ForeColor = Color.White };
+            var btnDown = new Button { Text = "Bajar (E)", Width = 80, Height = 26, Location = new Point(192, 88), FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(60, 60, 60), ForeColor = Color.White };
+
+            btnFwd.Click += (s, ev) => { camara.Position.z += camara.Speed; pictureBox1.Invalidate(); };
+            btnBack.Click += (s, ev) => { camara.Position.z -= camara.Speed; pictureBox1.Invalidate(); };
+            btnLeft.Click += (s, ev) => { camara.Position.x -= camara.Speed; pictureBox1.Invalidate(); };
+            btnRight.Click += (s, ev) => { camara.Position.x += camara.Speed; pictureBox1.Invalidate(); };
+            btnUp.Click += (s, ev) => { camara.Position.y += camara.Speed; pictureBox1.Invalidate(); };
+            btnDown.Click += (s, ev) => { camara.Position.y -= camara.Speed; pictureBox1.Invalidate(); };
+
+            grpCam.Controls.Add(btnResetCam);
+            grpCam.Controls.Add(btnFwd);
+            grpCam.Controls.Add(btnBack);
+            grpCam.Controls.Add(btnLeft);
+            grpCam.Controls.Add(btnRight);
+            grpCam.Controls.Add(btnUp);
+            grpCam.Controls.Add(btnDown);
+            flowLayoutPanel1.Controls.Add(grpCam);
+
+            // Sliders (traslación, rotación, escala)
+            GenerarSliders("TRASLACIÓN", -200, 200, 0, slidersTraslacion, (c, v) =>
+            {
                 if (modeloSeleccionado == null) return;
-                if (c == 'X') modeloSeleccionado.Position.x = v; 
-                if (c == 'Y') modeloSeleccionado.Position.y = v; 
+                if (c == 'X') modeloSeleccionado.Position.x = v;
+                if (c == 'Y') modeloSeleccionado.Position.y = v;
                 if (c == 'Z') modeloSeleccionado.Position.z = v;
                 pictureBox1.Invalidate();
             });
-            GenerarSliders("ROTACIÓN", 0, 360, 0, slidersRotacion, (c, v) => {
+
+            GenerarSliders("ROTACIÓN", 0, 360, 0, slidersRotacion, (c, v) =>
+            {
                 if (modeloSeleccionado == null) return;
-                if (c == 'X') modeloSeleccionado.Rotation.x = v; 
-                if (c == 'Y') modeloSeleccionado.Rotation.y = v; 
+                if (c == 'X') modeloSeleccionado.Rotation.x = v;
+                if (c == 'Y') modeloSeleccionado.Rotation.y = v;
                 if (c == 'Z') modeloSeleccionado.Rotation.z = v;
                 pictureBox1.Invalidate();
             });
-            GenerarSliders("ESCALA", 1, 30, 10, slidersEscala, (c, v) => {
+
+            GenerarSliders("ESCALA", 1, 30, 10, slidersEscala, (c, v) =>
+            {
                 if (modeloSeleccionado == null) return;
                 float s = v / 10.0f;
-                if (c == 'X') modeloSeleccionado.Scale.x = s; 
-                if (c == 'Y') modeloSeleccionado.Scale.y = s; 
+                if (c == 'X') modeloSeleccionado.Scale.x = s;
+                if (c == 'Y') modeloSeleccionado.Scale.y = s;
                 if (c == 'Z') modeloSeleccionado.Scale.z = s;
                 pictureBox1.Invalidate();
             });
 
-            // Seleccionar el cubo inicial después de crear los sliders
+            // Seleccionar cubo inicial
             SeleccionarModelo(cuboInicial);
         }
 
-        // Genera un nombre único para el objeto (ej: "Cubo 1", "Cubo 2")
         private string GenerarNombreUnico(string tipoBase)
         {
             contadoresObjetos[tipoBase]++;
             return $"{tipoBase} {contadoresObjetos[tipoBase]}";
         }
 
-        // Obtiene el icono visual para cada tipo de objeto (similar a Blender)
         private string ObtenerIconoObjeto(string nombre)
         {
             if (nombre.Contains("Cubo")) return "🔳";
@@ -130,18 +264,15 @@ namespace Motor3D_Educativo_P2
             return "📦";
         }
 
-        // Actualiza el ListBox con todos los objetos de la escena
         private void ActualizarListaObjetos()
         {
             listBoxObjetos.Items.Clear();
             foreach (var modelo in escena.Modelos)
             {
-                // Agregar icono visual antes del nombre
                 string itemText = $"  {ObtenerIconoObjeto(modelo.Nombre)} {modelo.Nombre}";
                 listBoxObjetos.Items.Add(itemText);
             }
-            
-            // Seleccionar el item correspondiente al modelo seleccionado
+
             if (modeloSeleccionado != null)
             {
                 int index = escena.Modelos.IndexOf(modeloSeleccionado);
@@ -152,7 +283,6 @@ namespace Motor3D_Educativo_P2
             }
         }
 
-        // Evento cuando se selecciona un objeto en el ListBox
         private void listBoxObjetos_SelectedIndexChanged(object sender, EventArgs e)
         {
             if (listBoxObjetos.SelectedIndex >= 0 && listBoxObjetos.SelectedIndex < escena.Modelos.Count)
@@ -161,39 +291,37 @@ namespace Motor3D_Educativo_P2
             }
         }
 
-        // Helper para UI (modificado para almacenar referencias a los sliders)
         void GenerarSliders(string t, int min, int max, int def, Dictionary<string, TrackBar> diccionarioSliders, Action<char, int> act)
         {
-            GroupBox g = new GroupBox(); 
-            g.Text = t; 
-            g.Size = new Size(220, 160); 
+            GroupBox g = new GroupBox();
+            g.Text = t;
+            g.Size = new Size(260, 150);
             g.ForeColor = Color.White;
-            g.BackColor = Color.FromArgb(37, 37, 37); // Fondo oscuro para el GroupBox
+            g.BackColor = Color.FromArgb(37, 37, 37);
             int y = 20;
             foreach (char c in new[] { 'X', 'Y', 'Z' })
             {
-                Label l = new Label(); 
-                l.Text = c.ToString(); 
-                l.Location = new Point(10, y); 
-                l.ForeColor = Color.White; // Color blanco para el texto
-                l.BackColor = Color.Transparent; // Fondo transparente
+                Label l = new Label();
+                l.Text = c.ToString();
+                l.Location = new Point(10, y);
+                l.ForeColor = Color.White;
+                l.BackColor = Color.Transparent;
                 l.AutoSize = true;
-                
-                TrackBar tb = new TrackBar(); 
-                tb.Location = new Point(30, y); 
-                tb.Size = new Size(180, 30); 
-                tb.Minimum = min; 
-                tb.Maximum = max; 
-                tb.Value = def; 
+
+                TrackBar tb = new TrackBar();
+                tb.Location = new Point(40, y - 6);
+                tb.Size = new Size(200, 30);
+                tb.Minimum = min;
+                tb.Maximum = max;
+                tb.Value = def;
                 tb.TickStyle = TickStyle.None;
                 tb.Scroll += (s, e) => act(c, tb.Value);
-                
-                // Almacenar referencia al TrackBar
+
                 diccionarioSliders[c.ToString()] = tb;
-                
-                g.Controls.Add(l); 
-                g.Controls.Add(tb); 
-                y += 45;
+
+                g.Controls.Add(l);
+                g.Controls.Add(tb);
+                y += 40;
             }
             flowLayoutPanel1.Controls.Add(g);
         }
@@ -202,15 +330,12 @@ namespace Motor3D_Educativo_P2
         {
             if (modeloSeleccionado != null) modeloSeleccionado.Selected = false;
             modeloSeleccionado = m;
-            if (modeloSeleccionado != null) 
+            if (modeloSeleccionado != null)
             {
                 modeloSeleccionado.Selected = true;
-                
-                // Actualizar los sliders con los valores del modelo seleccionado
                 ActualizarSliders();
             }
-            
-            // Actualizar selección en el ListBox sin disparar el evento
+
             if (m != null)
             {
                 int index = escena.Modelos.IndexOf(m);
@@ -219,18 +344,14 @@ namespace Motor3D_Educativo_P2
                     listBoxObjetos.SelectedIndex = index;
                 }
             }
-            
+
             pictureBox1.Invalidate();
         }
 
-        /// <summary>
-        /// Actualiza los valores de los sliders según el modelo seleccionado
-        /// </summary>
         void ActualizarSliders()
         {
             if (modeloSeleccionado == null) return;
 
-            // Actualizar Traslación
             if (slidersTraslacion.ContainsKey("X"))
                 slidersTraslacion["X"].Value = (int)Math.Max(slidersTraslacion["X"].Minimum, Math.Min(slidersTraslacion["X"].Maximum, modeloSeleccionado.Position.x));
             if (slidersTraslacion.ContainsKey("Y"))
@@ -238,7 +359,6 @@ namespace Motor3D_Educativo_P2
             if (slidersTraslacion.ContainsKey("Z"))
                 slidersTraslacion["Z"].Value = (int)Math.Max(slidersTraslacion["Z"].Minimum, Math.Min(slidersTraslacion["Z"].Maximum, modeloSeleccionado.Position.z));
 
-            // Actualizar Rotación
             if (slidersRotacion.ContainsKey("X"))
                 slidersRotacion["X"].Value = (int)Math.Max(slidersRotacion["X"].Minimum, Math.Min(slidersRotacion["X"].Maximum, modeloSeleccionado.Rotation.x));
             if (slidersRotacion.ContainsKey("Y"))
@@ -246,7 +366,6 @@ namespace Motor3D_Educativo_P2
             if (slidersRotacion.ContainsKey("Z"))
                 slidersRotacion["Z"].Value = (int)Math.Max(slidersRotacion["Z"].Minimum, Math.Min(slidersRotacion["Z"].Maximum, modeloSeleccionado.Rotation.z));
 
-            // Actualizar Escala (multiplicar por 10 porque los sliders van de 1 a 30)
             if (slidersEscala.ContainsKey("X"))
                 slidersEscala["X"].Value = (int)Math.Max(slidersEscala["X"].Minimum, Math.Min(slidersEscala["X"].Maximum, modeloSeleccionado.Scale.x * 10));
             if (slidersEscala.ContainsKey("Y"))
@@ -257,7 +376,6 @@ namespace Motor3D_Educativo_P2
 
         void AnadirFigura()
         {
-            // Añade un cubo por defecto en una posición ligeramente aleatoria o fija
             var m = MeshFactory.CrearCubo(100);
             m.Nombre = GenerarNombreUnico("Cubo");
             m.Position = new Math3D.Vector3D(0, 0, 0);
@@ -289,17 +407,16 @@ namespace Motor3D_Educativo_P2
         void CambiarTipoFiguraSeleccionada()
         {
             if (modeloSeleccionado == null) return;
-            
-            // Guardar transformaciones actuales y nombre base
+
             var pos = modeloSeleccionado.Position;
             var rot = modeloSeleccionado.Rotation;
             var scl = modeloSeleccionado.Scale;
 
             figuraIndice++; if (figuraIndice > 4) figuraIndice = 0;
-            
+
             Modelo3D nuevoModelo = null;
             string tipoNovo = "";
-            
+
             switch (figuraIndice)
             {
                 case 0: nuevoModelo = MeshFactory.CrearCubo(100); tipoNovo = "Cubo"; break;
@@ -309,28 +426,24 @@ namespace Motor3D_Educativo_P2
                 case 4: nuevoModelo = MeshFactory.CrearEsfera(80, 12, 12); tipoNovo = "Esfera"; break;
             }
 
-            // Asignar nuevo nombre único
             nuevoModelo.Nombre = GenerarNombreUnico(tipoNovo);
-            
-            // Restaurar transformaciones
+
             nuevoModelo.Position = pos;
             nuevoModelo.Rotation = rot;
             nuevoModelo.Scale = scl;
             nuevoModelo.Selected = true;
 
-            // Reemplazar en la lista
             int index = escena.Modelos.IndexOf(modeloSeleccionado);
             if (index != -1)
             {
                 escena.Modelos[index] = nuevoModelo;
                 modeloSeleccionado = nuevoModelo;
             }
-            
+
             ActualizarListaObjetos();
             pictureBox1.Invalidate();
         }
 
-        // --- CONTROLES WASD ---
         private void Form1_KeyDown(object sender, KeyEventArgs e)
         {
             float s = camara.Speed;
@@ -340,15 +453,14 @@ namespace Motor3D_Educativo_P2
                 case Keys.S: camara.Position.z -= s; break;
                 case Keys.A: camara.Position.x -= s; break;
                 case Keys.D: camara.Position.x += s; break;
-                case Keys.Q: camara.Position.y += s; break; // Subir
-                case Keys.E: camara.Position.y -= s; break; // Bajar
+                case Keys.Q: camara.Position.y += s; break;
+                case Keys.E: camara.Position.y -= s; break;
             }
             pictureBox1.Invalidate();
         }
 
         private void PictureBox1_MouseClick(object sender, MouseEventArgs e)
         {
-            // Solo seleccionar si no fue un arrastre
             if (!isDragging && e.Button == MouseButtons.Left)
             {
                 SeleccionarObjetoPorMouse(e.Location);
@@ -371,7 +483,6 @@ namespace Motor3D_Educativo_P2
         {
             if (isMouseDown)
             {
-                // Si se mueve el mouse mientras está presionado, es un arrastre
                 if (Math.Abs(e.X - lastMousePos.X) > 3 || Math.Abs(e.Y - lastMousePos.Y) > 3)
                 {
                     isDragging = true;
@@ -390,19 +501,15 @@ namespace Motor3D_Educativo_P2
             pictureBox1.Invalidate();
         }
 
-        /// <summary>
-        /// Selecciona un objeto en la escena basándose en la posición del mouse
-        /// </summary>
         private void SeleccionarObjetoPorMouse(Point mousePos)
         {
             centroPantalla = new Point(pictureBox1.Width / 2, pictureBox1.Height / 2);
-            
-            // Buscar el objeto más cercano que intersecte con el punto del mouse
+
             Modelo3D objetoSeleccionado = null;
             float menorDistancia = float.MaxValue;
 
-            // Recorrer todos los modelos de atrás hacia adelante (ordenados por profundidad)
-            var modelosOrdenados = escena.Modelos.OrderByDescending(m => {
+            var modelosOrdenados = escena.Modelos.OrderByDescending(m =>
+            {
                 return Math.Sqrt(Math.Pow(m.Position.x - camara.Position.x, 2) +
                                  Math.Pow(m.Position.y - camara.Position.y, 2) +
                                  Math.Pow(m.Position.z - camara.Position.z, 2));
@@ -410,7 +517,6 @@ namespace Motor3D_Educativo_P2
 
             foreach (var modelo in modelosOrdenados)
             {
-                // Proyectar todas las caras del modelo
                 foreach (var face in modelo.Faces)
                 {
                     PointF[] puntosProyectados = new PointF[face.Corners3D.Length];
@@ -419,20 +525,16 @@ namespace Motor3D_Educativo_P2
 
                     for (int i = 0; i < face.Corners3D.Length; i++)
                     {
-                        // Aplicar las mismas transformaciones que en el método Draw
                         Math3D.Vector3D worldPoint = AplicarTransformacion(face.Corners3D[i], modelo);
-                        
-                        // Transformación de cámara
+
                         Math3D.Vector3D viewPoint = new Math3D.Vector3D(
                             worldPoint.x - camara.Position.x,
                             worldPoint.y - camara.Position.y,
                             worldPoint.z - camara.Position.z
                         );
 
-                        // Rotar según la cámara
                         viewPoint = RotarPunto(viewPoint, -camara.Rotation.x, -camara.Rotation.y, 0);
 
-                        // Proyección
                         float zoom = 600f;
 
                         if (viewPoint.z > -1)
@@ -453,10 +555,8 @@ namespace Motor3D_Educativo_P2
                     {
                         profundidadPromedio /= puntosProyectados.Length;
 
-                        // Verificar si el punto del mouse está dentro del polígono proyectado
                         if (PuntoEnPoligono(mousePos, puntosProyectados))
                         {
-                            // Seleccionar el objeto más cercano a la cámara
                             if (profundidadPromedio < menorDistancia)
                             {
                                 menorDistancia = profundidadPromedio;
@@ -466,35 +566,24 @@ namespace Motor3D_Educativo_P2
                     }
                 }
 
-                // Si ya encontramos un objeto, detener la búsqueda (el primero visible es el más cercano)
-                if (objetoSeleccionado != null)
-                {
-                    break;
-                }
+                if (objetoSeleccionado != null) break;
             }
 
-            // Seleccionar el objeto encontrado
             if (objetoSeleccionado != null)
             {
                 SeleccionarModelo(objetoSeleccionado);
             }
         }
 
-        /// <summary>
-        /// Aplica las transformaciones de escala, rotación y traslación a un vértice
-        /// </summary>
         private Math3D.Vector3D AplicarTransformacion(Math3D.Vector3D vertice, Modelo3D modelo)
         {
-            // 1. Escala
             float vx = vertice.x * modelo.Scale.x;
             float vy = vertice.y * modelo.Scale.y;
             float vz = vertice.z * modelo.Scale.z;
 
-            // 2. Rotación
-            Math3D.Vector3D rotado = RotarPunto(new Math3D.Vector3D(vx, vy, vz), 
+            Math3D.Vector3D rotado = RotarPunto(new Math3D.Vector3D(vx, vy, vz),
                                                  modelo.Rotation.x, modelo.Rotation.y, modelo.Rotation.z);
 
-            // 3. Traslación
             rotado.x += modelo.Position.x;
             rotado.y += modelo.Position.y;
             rotado.z += modelo.Position.z;
@@ -502,9 +591,6 @@ namespace Motor3D_Educativo_P2
             return rotado;
         }
 
-        /// <summary>
-        /// Rota un punto en el espacio 3D
-        /// </summary>
         private Math3D.Vector3D RotarPunto(Math3D.Vector3D punto, float rx, float ry, float rz)
         {
             Math3D.Vector3D resultado = punto;
@@ -514,9 +600,6 @@ namespace Motor3D_Educativo_P2
             return resultado;
         }
 
-        /// <summary>
-        /// Determina si un punto está dentro de un polígono usando el algoritmo Ray Casting
-        /// </summary>
         private bool PuntoEnPoligono(Point punto, PointF[] poligono)
         {
             bool dentro = false;
@@ -525,7 +608,7 @@ namespace Motor3D_Educativo_P2
             for (int i = 0; i < poligono.Length; i++)
             {
                 if ((poligono[i].Y > punto.Y) != (poligono[j].Y > punto.Y) &&
-                    punto.X < (poligono[j].X - poligono[i].X) * (punto.Y - poligono[i].Y) / 
+                    punto.X < (poligono[j].X - poligono[i].X) * (punto.Y - poligono[i].Y) /
                     (poligono[j].Y - poligono[i].Y) + poligono[i].X)
                 {
                     dentro = !dentro;
@@ -536,21 +619,17 @@ namespace Motor3D_Educativo_P2
             return dentro;
         }
 
-        // --- RENDERIZADO PRINCIPAL ---
         private void pictureBox1_Paint(object sender, PaintEventArgs e)
         {
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-            e.Graphics.Clear(Color.FromArgb(20, 20, 20)); // Fondo Gris Oscuro
+            e.Graphics.Clear(Color.FromArgb(20, 20, 20));
             centroPantalla = new Point(pictureBox1.Width / 2, pictureBox1.Height / 2);
 
-            // 1. Dibujar el Suelo (Grid)
             DrawGrid(e.Graphics);
 
-            // 2. Dibujar la Escena (todos los modelos)
             escena.Draw(e.Graphics, centroPantalla, camara);
         }
 
-        // --- DIBUJO DEL GRID Y AUXILIARES (Aquí tenías errores antes) ---
         private void DrawGrid(Graphics g)
         {
             int size = 2000; int step = 200;
@@ -561,7 +640,6 @@ namespace Motor3D_Educativo_P2
                 DrawLine3D(g, gridPen, new Math3D.Vector3D(-size, 0, i), new Math3D.Vector3D(size, 0, i));
                 DrawLine3D(g, gridPen, new Math3D.Vector3D(i, 0, -size), new Math3D.Vector3D(i, 0, size));
             }
-            // Ejes centrales
             DrawLine3D(g, Pens.Red, new Math3D.Vector3D(-size, 0, 0), new Math3D.Vector3D(size, 0, 0));
             DrawLine3D(g, Pens.Blue, new Math3D.Vector3D(0, 0, -size), new Math3D.Vector3D(0, 0, size));
         }
@@ -573,30 +651,21 @@ namespace Motor3D_Educativo_P2
             if (s.HasValue && e.HasValue) g.DrawLine(p, s.Value, e.Value);
         }
 
-        // Proyecta un punto SOLO para el Grid (Lógica simplificada de la cámara)
         private PointF? ProjectPoint(Math3D.Vector3D p)
         {
-            // 1. Mundo -> Vista
             float vx = p.x - camara.Position.x;
             float vy = p.y - camara.Position.y;
             float vz = p.z - camara.Position.z;
 
-            // 2. Rotación Cámara
             Math3D.Vector3D temp = Math3D.RotateY(new Math3D.Vector3D(vx, vy, vz), -camara.Rotation.y);
             temp = Math3D.RotateX(temp, -camara.Rotation.x);
 
-            // 3. Proyección
-            if (temp.z > -1) return null; // Detrás de cámara
+            if (temp.z > -1) return null;
             float zoom = 600f;
             float zDepth = -temp.z;
             return new PointF((temp.x * zoom) / zDepth + centroPantalla.X, (-temp.y * zoom) / zDepth + centroPantalla.Y);
         }
 
-        private void pictureBox1_Resize(object sender, EventArgs e) { pictureBox1.Invalidate(); }
-
-        // --- FUNCIONES DE CARGA DE TEXTURAS (solo imágenes desde disco) ---
-
-        // Abre OpenFileDialog y carga bitmap sin bloquear el archivo. Devuelve null si no se cargó.
         private Bitmap PromptLoadTexture(string title = "Selecciona imagen de textura")
         {
             using (OpenFileDialog of = new OpenFileDialog())
@@ -607,7 +676,6 @@ namespace Motor3D_Educativo_P2
                 try
                 {
                     var bmp = LoadBitmapNoLock(of.FileName);
-                    // Opcional: reescalar si es demasiado grande para mantener rendimiento
                     const int maxDim = 1024;
                     if (bmp.Width > maxDim || bmp.Height > maxDim)
                     {
@@ -625,7 +693,6 @@ namespace Motor3D_Educativo_P2
             }
         }
 
-        // Carga un Bitmap sin mantener el archivo bloqueado
         private Bitmap LoadBitmapNoLock(string path)
         {
             using (var fs = new System.IO.FileStream(path, System.IO.FileMode.Open, System.IO.FileAccess.Read, System.IO.FileShare.Read))
@@ -634,18 +701,16 @@ namespace Motor3D_Educativo_P2
             }
         }
 
-        // Asigna la textura al material del modelo liberando la anterior
         private void SetModelTexture(Bitmap bmp)
         {
-            if (modeloActual == null) return;
-            if (modeloActual.Material == null) modeloActual.Material = new Material(Color.LightGray);
+            if (modeloSeleccionado == null) return;
+            if (modeloSeleccionado.Material == null) modeloSeleccionado.Material = new Material(Color.LightGray);
 
-            var prev = modeloActual.Material.Texture;
-            modeloActual.Material.Texture = bmp;
+            var prev = modeloSeleccionado.Material.Texture;
+            modeloSeleccionado.Material.Texture = bmp;
             prev?.Dispose();
         }
 
-        // Reescala manteniendo aspecto
         private Bitmap ResizeBitmapProportional(Bitmap src, int maxWidth, int maxHeight)
         {
             float ratio = Math.Min((float)maxWidth / src.Width, (float)maxHeight / src.Height);
@@ -663,8 +728,8 @@ namespace Motor3D_Educativo_P2
         }
 
         private void pictureBox1_Click(object sender, EventArgs e)
-        {   
+        {
 
         }
     }
-}
+}                                                                                                           
