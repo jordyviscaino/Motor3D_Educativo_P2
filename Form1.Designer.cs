@@ -18,7 +18,6 @@
         private void InitializeComponent()
         {
             this.splitContainer1 = new System.Windows.Forms.SplitContainer();
-            // 1. AQUÍ ESTÁ EL CAMBIO: Usamos PictureBox en vez de GLControl
             this.pictureBox1 = new System.Windows.Forms.PictureBox();
             this.flowLayoutPanel1 = new System.Windows.Forms.FlowLayoutPanel();
             this.lblRotX = new System.Windows.Forms.Label();
@@ -35,7 +34,6 @@
             ((System.ComponentModel.ISupportInitialize)(this.trackRotX)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.trackRotY)).BeginInit();
             this.SuspendLayout();
-
             // 
             // splitContainer1
             // 
@@ -45,7 +43,7 @@
             // 
             // splitContainer1.Panel1
             // 
-            this.splitContainer1.Panel1.Controls.Add(this.pictureBox1); // Agregamos el PictureBox
+            this.splitContainer1.Panel1.Controls.Add(this.pictureBox1);
             // 
             // splitContainer1.Panel2
             // 
@@ -53,21 +51,19 @@
             this.splitContainer1.Size = new System.Drawing.Size(800, 450);
             this.splitContainer1.SplitterDistance = 560;
             this.splitContainer1.TabIndex = 0;
-
             // 
             // pictureBox1
             // 
-            this.pictureBox1.BackColor = System.Drawing.Color.Black; // Fondo negro
+            this.pictureBox1.BackColor = System.Drawing.Color.Black;
             this.pictureBox1.Dock = System.Windows.Forms.DockStyle.Fill;
             this.pictureBox1.Location = new System.Drawing.Point(0, 0);
             this.pictureBox1.Name = "pictureBox1";
             this.pictureBox1.Size = new System.Drawing.Size(560, 450);
             this.pictureBox1.TabIndex = 0;
             this.pictureBox1.TabStop = false;
-            // IMPORTANTE: Conectar el evento Paint
+            this.pictureBox1.Click += new System.EventHandler(this.pictureBox1_Click);
             this.pictureBox1.Paint += new System.Windows.Forms.PaintEventHandler(this.pictureBox1_Paint);
             this.pictureBox1.Resize += new System.EventHandler(this.pictureBox1_Resize);
-
             // 
             // flowLayoutPanel1
             // 
@@ -90,7 +86,7 @@
             this.lblRotX.Font = new System.Drawing.Font("Microsoft Sans Serif", 10F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.lblRotX.Location = new System.Drawing.Point(13, 10);
             this.lblRotX.Name = "lblRotX";
-            this.lblRotX.Size = new System.Drawing.Size(89, 17);
+            this.lblRotX.Size = new System.Drawing.Size(87, 17);
             this.lblRotX.TabIndex = 0;
             this.lblRotX.Text = "Rotación X";
             // 
@@ -108,7 +104,7 @@
             this.lblRotY.Font = new System.Drawing.Font("Microsoft Sans Serif", 10F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.lblRotY.Location = new System.Drawing.Point(13, 78);
             this.lblRotY.Name = "lblRotY";
-            this.lblRotY.Size = new System.Drawing.Size(89, 17);
+            this.lblRotY.Size = new System.Drawing.Size(87, 17);
             this.lblRotY.TabIndex = 2;
             this.lblRotY.Text = "Rotación Y";
             // 

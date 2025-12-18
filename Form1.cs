@@ -41,7 +41,7 @@ namespace Motor3D_Educativo_P2
         {
             // Cargar cubo por defecto
             modeloActual = MeshFactory.CrearCubo(100);
-
+            SetModelTexture(new Bitmap(Properties.Resources.wood)); // crea copia que puede ser disposed
             // -- GENERACIÓN DE UI --
             flowLayoutPanel1.Controls.Clear();
             Button btn = new Button(); btn.Text = "Cambiar Figura"; btn.Height = 40; btn.Width = 200;
@@ -69,31 +69,30 @@ namespace Motor3D_Educativo_P2
             trackLightIntensity.Scroll += (s, ev3) => { Core.Scene.LightIntensity = trackLightIntensity.Value / 100f; pictureBox1.Invalidate(); };
             flowLayoutPanel1.Controls.Add(trackLightIntensity);
 
-            // Botón para cargar textura
-            Button btnLoadTex = new Button(); btnLoadTex.Text = "Cargar Textura"; btnLoadTex.Width = 200; btnLoadTex.Height = 40;
+            // Botón para cargar textura desde archivo (sin bloquear archivo)
+            Button btnLoadTex = new Button(); btnLoadTex.Text = "Cargar Textura (archivo)"; btnLoadTex.Width = 200; btnLoadTex.Height = 40;
             btnLoadTex.Click += (s, ev4) => {
-                using (OpenFileDialog of = new OpenFileDialog())
-                {
-                    of.Filter = "Imágenes|*.png;*.jpg;*.jpeg;*.bmp";
-                    if (of.ShowDialog() == DialogResult.OK)
-                    {
-                        try
-                        {
-                            var bmp = (Bitmap)Bitmap.FromFile(of.FileName);
-                            if (modeloActual != null && modeloActual.Material != null)
-                            {
-                                modeloActual.Material.Texture = bmp;
-                            }
-                            pictureBox1.Invalidate();
-                        }
-                        catch (Exception ex)
-                        {
-                            MessageBox.Show("Error cargando textura: " + ex.Message);
-                        }
-                    }
-                }
+                var bmp = PromptLoadTexture();
+                if (bmp != null) { SetModelTexture(bmp); pictureBox1.Invalidate(); }
             };
             flowLayoutPanel1.Controls.Add(btnLoadTex);
+
+            // Botones que permiten elegir una imagen para cada tipo de textura
+            var btnWood = new Button() { Text = "Seleccionar: Madera", Width = 200, Height = 36 };
+            btnWood.Click += (s, evWood) => { var bmp = PromptLoadTexture("Selecciona imagen de madera"); if (bmp != null) { SetModelTexture(bmp); pictureBox1.Invalidate(); } };
+            flowLayoutPanel1.Controls.Add(btnWood);
+
+            var btnMetal = new Button() { Text = "Seleccionar: Metálica", Width = 200, Height = 36 };
+            btnMetal.Click += (s, evMetal) => { var bmp = PromptLoadTexture("Selecciona imagen metálica"); if (bmp != null) { SetModelTexture(bmp); pictureBox1.Invalidate(); } };
+            flowLayoutPanel1.Controls.Add(btnMetal);
+
+            var btnStone = new Button() { Text = "Seleccionar: Piedra", Width = 200, Height = 36 };
+            btnStone.Click += (s, evStone) => { var bmp = PromptLoadTexture("Selecciona imagen de piedra"); if (bmp != null) { SetModelTexture(bmp); pictureBox1.Invalidate(); } };
+            flowLayoutPanel1.Controls.Add(btnStone);
+
+            var btnEarth = new Button() { Text = "Seleccionar: Tierra", Width = 200, Height = 36 };
+            btnEarth.Click += (s, evEarth) => { var bmp = PromptLoadTexture("Selecciona imagen de tierra"); if (bmp != null) { SetModelTexture(bmp); pictureBox1.Invalidate(); } };
+            flowLayoutPanel1.Controls.Add(btnEarth);
 
             GenerarSliders("TRASLACIÓN", -200, 200, 0, (c, v) => {
                 if (modeloActual == null) return;
@@ -236,5 +235,78 @@ namespace Motor3D_Educativo_P2
         }
 
         private void pictureBox1_Resize(object sender, EventArgs e) { pictureBox1.Invalidate(); }
+
+        // --- FUNCIONES DE CARGA DE TEXTURAS (solo imágenes desde disco) ---
+
+        // Abre OpenFileDialog y carga bitmap sin bloquear el archivo. Devuelve null si no se cargó.
+        private Bitmap PromptLoadTexture(string title = "Selecciona imagen de textura")
+        {
+            using (OpenFileDialog of = new OpenFileDialog())
+            {
+                of.Title = title;
+                of.Filter = "Imágenes|*.png;*.jpg;*.jpeg;*.bmp";
+                if (of.ShowDialog() != DialogResult.OK) return null;
+                try
+                {
+                    var bmp = LoadBitmapNoLock(of.FileName);
+                    // Opcional: reescalar si es demasiado grande para mantener rendimiento
+                    const int maxDim = 1024;
+                    if (bmp.Width > maxDim || bmp.Height > maxDim)
+                    {
+                        var resized = ResizeBitmapProportional(bmp, maxDim, maxDim);
+                        bmp.Dispose();
+                        return resized;
+                    }
+                    return bmp;
+                }
+                catch
+                {
+                    MessageBox.Show("No se pudo cargar la imagen.");
+                    return null;
+                }
+            }
+        }
+
+        // Carga un Bitmap sin mantener el archivo bloqueado
+        private Bitmap LoadBitmapNoLock(string path)
+        {
+            using (var fs = new System.IO.FileStream(path, System.IO.FileMode.Open, System.IO.FileAccess.Read, System.IO.FileShare.Read))
+            {
+                return new Bitmap(fs);
+            }
+        }
+
+        // Asigna la textura al material del modelo liberando la anterior
+        private void SetModelTexture(Bitmap bmp)
+        {
+            if (modeloActual == null) return;
+            if (modeloActual.Material == null) modeloActual.Material = new Material(Color.LightGray);
+
+            var prev = modeloActual.Material.Texture;
+            modeloActual.Material.Texture = bmp;
+            prev?.Dispose();
+        }
+
+        // Reescala manteniendo aspecto
+        private Bitmap ResizeBitmapProportional(Bitmap src, int maxWidth, int maxHeight)
+        {
+            float ratio = Math.Min((float)maxWidth / src.Width, (float)maxHeight / src.Height);
+            int w = Math.Max(1, (int)(src.Width * ratio));
+            int h = Math.Max(1, (int)(src.Height * ratio));
+            Bitmap dst = new Bitmap(w, h);
+            using (Graphics g = Graphics.FromImage(dst))
+            {
+                g.CompositingQuality = CompositingQuality.HighQuality;
+                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                g.SmoothingMode = SmoothingMode.HighQuality;
+                g.DrawImage(src, 0, 0, w, h);
+            }
+            return dst;
+        }
+
+        private void pictureBox1_Click(object sender, EventArgs e)
+        {   
+
+        }
     }
 }

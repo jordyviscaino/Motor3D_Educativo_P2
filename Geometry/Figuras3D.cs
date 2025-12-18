@@ -86,23 +86,13 @@ namespace Motor3D_Educativo_P2
                 {
                     try
                     {
-                        // Promediar UVs de la cara y samplear la textura en ese punto (mapeo básico)
-                        float su = 0, sv = 0;
-                        for (int i = 0; i < face.UVs.Length; i++) { su += face.UVs[i].X; sv += face.UVs[i].Y; }
-                        su /= face.UVs.Length; sv /= face.UVs.Length;
-
-                        Bitmap tex = Material.Texture;
-                        if (tex != null && tex.Width > 0 && tex.Height > 0)
-                        {
-                            int tx = (int)(Math.Min(1f, Math.Max(0f, su)) * (tex.Width - 1));
-                            int ty = (int)((1f - Math.Min(1f, Math.Max(0f, sv))) * (tex.Height - 1)); // invertir V
-                            Color c = tex.GetPixel(tx, ty);
-                            sampledColor = c;
-                        }
+                        // DrawTexturedFace(g, face, worldPoints, cam, ref isVisible, viewCenter, Material.Texture);
+                        DrawTexturedFacePersp(g, face, worldPoints, cam, ref isVisible, viewCenter, Material.Texture, intensity);
+                        continue; // cara ya dibujada
                     }
                     catch
                     {
-                        sampledColor = materialColor; // fallback
+                        // si algo falla, seguimos con el pipeline normal (relleno con color)
                     }
                 }
 
@@ -205,6 +195,139 @@ namespace Motor3D_Educativo_P2
                 {
                     g.FillPolygon(brush, pts);
                 }
+                g.DrawPolygon(Pens.Black, pts);
+            }
+        }
+
+        // Helper: dibuja una cara texturizada usando DrawImage sobre triángulos (o quads divididos)
+        // Nuevo helper: dibuja la textura por cara usando la región de la imagen definida por las UVs de la cara.
+        private void DrawTexturedFacePersp(Graphics g, Math3D.Face face, Math3D.Vector3D[] worldPoints, Camara cam, ref bool isVisible, Point viewCenter, Bitmap tex, float intensity)
+        {
+            if (tex == null || face.UVs == null || face.UVs.Length != worldPoints.Length) return;
+
+            // Proyectar vértices
+            PointF[] pts = new PointF[worldPoints.Length];
+            float[] zDepths = new float[worldPoints.Length];
+            for (int i = 0; i < worldPoints.Length; i++)
+            {
+                Math3D.Vector3D v = new Math3D.Vector3D(
+                    worldPoints[i].x - cam.Position.x,
+                    worldPoints[i].y - cam.Position.y,
+                    worldPoints[i].z - cam.Position.z);
+                v = RotatePointHelper(v, -cam.Rotation.x, -cam.Rotation.y, 0);
+                if (v.z > -1) { isVisible = false; return; }
+                float zDepth = -v.z;
+                zDepths[i] = zDepth;
+                pts[i] = new PointF((v.x * 600f) / zDepth + viewCenter.X, (-v.y * 600f) / zDepth + viewCenter.Y);
+            }
+
+            // Solo manejamos triángulos directamente; si es quad lo dividimos
+            if (pts.Length == 4)
+            {
+                // dos triángulos: 0,1,2 y 0,2,3
+                DrawTexturedFacePersp(g, new Math3D.Face { UVs = new [] { face.UVs[0], face.UVs[1], face.UVs[2] }, Corners3D = new [] { face.Corners3D[0], face.Corners3D[1], face.Corners3D[2] }, Color = face.Color }, 
+                    new Math3D.Vector3D[] { worldPoints[0], worldPoints[1], worldPoints[2] }, cam, ref isVisible, viewCenter, tex, intensity);
+                DrawTexturedFacePersp(g, new Math3D.Face { UVs = new [] { face.UVs[0], face.UVs[2], face.UVs[3] }, Corners3D = new [] { face.Corners3D[0], face.Corners3D[2], face.Corners3D[3] }, Color = face.Color }, 
+                    new Math3D.Vector3D[] { worldPoints[0], worldPoints[2], worldPoints[3] }, cam, ref isVisible, viewCenter, tex, intensity);
+                return;
+            }
+            if (pts.Length != 3) { using (SolidBrush br = new SolidBrush(face.Color)) g.FillPolygon(br, pts); g.DrawPolygon(Pens.Black, pts); return; }
+
+            // Preparar valores por vértice para interpolación perspectiva
+            float[] invZ = new float[3];
+            float[] uOverZ = new float[3];
+            float[] vOverZ = new float[3];
+            for (int i = 0; i < 3; i++)
+            {
+                invZ[i] = 1f / zDepths[i];
+                float u = face.UVs[i].X;
+                float v = face.UVs[i].Y;
+                uOverZ[i] = u * invZ[i];
+                vOverZ[i] = v * invZ[i];
+            }
+
+            // Bounding box en enteros
+            int minX = (int)Math.Floor(Math.Min(Math.Min(pts[0].X, pts[1].X), pts[2].X));
+            int maxX = (int)Math.Ceiling(Math.Max(Math.Max(pts[0].X, pts[1].X), pts[2].X));
+            int minY = (int)Math.Floor(Math.Min(Math.Min(pts[0].Y, pts[1].Y), pts[2].Y));
+            int maxY = (int)Math.Ceiling(Math.Max(Math.Max(pts[0].Y, pts[1].Y), pts[2].Y));
+
+            // Clamp al área de dibujo razonable
+            Rectangle clip = g.VisibleClipBounds.IsEmpty ? new Rectangle(0, 0, tex.Width, tex.Height) : Rectangle.Round(g.VisibleClipBounds);
+            minX = Math.Max(minX, 0);
+            minY = Math.Max(minY, 0);
+            maxX = Math.Min(maxX, clip.Width - 1);
+            maxY = Math.Min(maxY, clip.Height - 1);
+            if (minX > maxX || minY > maxY) return;
+
+            // Edge function y área total (2x area)
+            Func<PointF, PointF, PointF, float> Edge = (a, b, p) => (p.X - a.X) * (b.Y - a.Y) - (p.Y - a.Y) * (b.X - a.X);
+            float area = Edge(pts[0], pts[1], pts[2]);
+            if (Math.Abs(area) < 1e-6f) return;
+
+            int texW = tex.Width, texH = tex.Height;
+
+            // Sombreado por cara (aplicamos al color texturizado)
+            float ambient = 0.1f;
+            float lightFactor = ambient + intensity * Scene.LightIntensity;
+            float lR = Scene.LightColor.R / 255f;
+            float lG = Scene.LightColor.G / 255f;
+            float lB = Scene.LightColor.B / 255f;
+
+            // Render: creamos una bitmap temporal del tamaño del bbox para dibujar píxeles y luego la pegamos
+            int bw = maxX - minX + 1;
+            int bh = maxY - minY + 1;
+            using (Bitmap outBmp = new Bitmap(bw, bh, System.Drawing.Imaging.PixelFormat.Format32bppArgb))
+            {
+                for (int py = minY; py <= maxY; py++)
+                {
+                    for (int px = minX; px <= maxX; px++)
+                    {
+                        PointF p = new PointF(px + 0.5f, py + 0.5f);
+                        float w0 = Edge(pts[1], pts[2], p);
+                        float w1 = Edge(pts[2], pts[0], p);
+                        float w2 = Edge(pts[0], pts[1], p);
+                        bool inside = (w0 >= 0 && w1 >= 0 && w2 >= 0) || (w0 <= 0 && w1 <= 0 && w2 <= 0);
+                        if (!inside) continue;
+                        float alpha = w0 / area;
+                        float beta = w1 / area;
+                        float gamma = w2 / area;
+
+                        // Interpolación perspectiva
+                        float iz = alpha * invZ[0] + beta * invZ[1] + gamma * invZ[2];
+                        if (iz == 0) continue;
+                        float uuOverZ = alpha * uOverZ[0] + beta * uOverZ[1] + gamma * uOverZ[2];
+                        float vvOverZ = alpha * vOverZ[0] + beta * vOverZ[1] + gamma * vOverZ[2];
+                        float u = uuOverZ / iz;
+                        float v = vvOverZ / iz;
+
+                        // Clamp UV
+                        u = Math.Max(0f, Math.Min(1f, u));
+                        v = Math.Max(0f, Math.Min(1f, v));
+
+                        // Sample nearest (puedes substituir por bilinear si quieres)
+                        int tx = (int)(u * (texW - 1));
+                        int ty = (int)((1f - v) * (texH - 1)); // invertir V como en el resto del código
+                        Color texC;
+                        try { texC = tex.GetPixel(tx, ty); }
+                        catch { texC = face.Color; }
+
+                        // Aplicar iluminación por face (multiplicar por lightFactor y color de la luz)
+                        int r = (int)(texC.R * lightFactor * lR);
+                        int gcol = (int)(texC.G * lightFactor * lG);
+                        int bcol = (int)(texC.B * lightFactor * lB);
+                        r = Math.Max(0, Math.Min(255, r));
+                        gcol = Math.Max(0, Math.Min(255, gcol));
+                        bcol = Math.Max(0, Math.Min(255, bcol));
+                        Color finalC = Color.FromArgb(255, r, gcol, bcol);
+
+                        outBmp.SetPixel(px - minX, py - minY, finalC);
+                    }
+                }
+
+                // Dibujar la región resultante en el contexto original
+                g.DrawImage(outBmp, minX, minY);
+                // Bordes
                 g.DrawPolygon(Pens.Black, pts);
             }
         }
