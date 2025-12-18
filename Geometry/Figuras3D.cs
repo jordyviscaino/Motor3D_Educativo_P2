@@ -209,6 +209,8 @@ namespace Motor3D_Educativo_P2
             }
         }
 
+        // Helper: dibuja una cara texturizada usando DrawImage sobre triángulos (o quads divididos)
+        // Nuevo helper: dibuja la textura por cara usando la región de la imagen definida por las UVs de la cara.
         private void DrawTexturedFacePersp(Graphics g, Math3D.Face face, Math3D.Vector3D[] worldPoints, Camara cam, ref bool isVisible, Point viewCenter, Bitmap tex, float intensity)
         {
             if (tex == null || face.UVs == null || face.UVs.Length != worldPoints.Length) return;
@@ -229,8 +231,10 @@ namespace Motor3D_Educativo_P2
                 pts[i] = new PointF((v.x * 600f) / zDepth + viewCenter.X, (-v.y * 600f) / zDepth + viewCenter.Y);
             }
 
+            // Solo manejamos triángulos directamente; si es quad lo dividimos
             if (pts.Length == 4)
             {
+                // dos triángulos: 0,1,2 y 0,2,3
                 DrawTexturedFacePersp(g, new Math3D.Face { UVs = new [] { face.UVs[0], face.UVs[1], face.UVs[2] }, Corners3D = new [] { face.Corners3D[0], face.Corners3D[1], face.Corners3D[2] }, Color = face.Color }, 
                     new Math3D.Vector3D[] { worldPoints[0], worldPoints[1], worldPoints[2] }, cam, ref isVisible, viewCenter, tex, intensity);
                 DrawTexturedFacePersp(g, new Math3D.Face { UVs = new [] { face.UVs[0], face.UVs[2], face.UVs[3] }, Corners3D = new [] { face.Corners3D[0], face.Corners3D[2], face.Corners3D[3] }, Color = face.Color }, 
@@ -239,6 +243,7 @@ namespace Motor3D_Educativo_P2
             }
             if (pts.Length != 3) { using (SolidBrush br = new SolidBrush(face.Color)) g.FillPolygon(br, pts); g.DrawPolygon(Pens.Black, pts); return; }
 
+            // Preparar valores por vértice para interpolación perspectiva
             float[] invZ = new float[3];
             float[] uOverZ = new float[3];
             float[] vOverZ = new float[3];
@@ -251,11 +256,13 @@ namespace Motor3D_Educativo_P2
                 vOverZ[i] = v * invZ[i];
             }
 
+            // Bounding box en enteros
             int minX = (int)Math.Floor(Math.Min(Math.Min(pts[0].X, pts[1].X), pts[2].X));
             int maxX = (int)Math.Ceiling(Math.Max(Math.Max(pts[0].X, pts[1].X), pts[2].X));
             int minY = (int)Math.Floor(Math.Min(Math.Min(pts[0].Y, pts[1].Y), pts[2].Y));
             int maxY = (int)Math.Ceiling(Math.Max(Math.Max(pts[0].Y, pts[1].Y), pts[2].Y));
 
+            // Clamp al área de dibujo razonable
             Rectangle clip = g.VisibleClipBounds.IsEmpty ? new Rectangle(0, 0, tex.Width, tex.Height) : Rectangle.Round(g.VisibleClipBounds);
             minX = Math.Max(minX, 0);
             minY = Math.Max(minY, 0);
@@ -263,18 +270,21 @@ namespace Motor3D_Educativo_P2
             maxY = Math.Min(maxY, clip.Height - 1);
             if (minX > maxX || minY > maxY) return;
 
+            // Edge function y área total (2x area)
             Func<PointF, PointF, PointF, float> Edge = (a, b, p) => (p.X - a.X) * (b.Y - a.Y) - (p.Y - a.Y) * (b.X - a.X);
             float area = Edge(pts[0], pts[1], pts[2]);
             if (Math.Abs(area) < 1e-6f) return;
 
             int texW = tex.Width, texH = tex.Height;
 
+            // Sombreado por cara (aplicamos al color texturizado)
             float ambient = 0.1f;
             float lightFactor = ambient + intensity * Scene.LightIntensity;
             float lR = Scene.LightColor.R / 255f;
             float lG = Scene.LightColor.G / 255f;
             float lB = Scene.LightColor.B / 255f;
 
+            // Render: creamos una bitmap temporal del tamaño del bbox para dibujar píxeles y luego la pegamos
             int bw = maxX - minX + 1;
             int bh = maxY - minY + 1;
             using (Bitmap outBmp = new Bitmap(bw, bh, System.Drawing.Imaging.PixelFormat.Format32bppArgb))
@@ -332,6 +342,9 @@ namespace Motor3D_Educativo_P2
             }
         }
 
+        // --- FUNCIONES AUXILIARES (Aquí estaba el error antes) ---
+
+        // Aplica Escala, Rotación y Traslación
         private Math3D.Vector3D ApplyTransform(Math3D.Vector3D v, Math3D.Vector3D pos, Math3D.Vector3D rot, Math3D.Vector3D scl)
         {
             // 1. Escala
@@ -349,6 +362,7 @@ namespace Motor3D_Educativo_P2
             return temp;
         }
 
+        // Esta es la función que te faltaba:
         private Math3D.Vector3D RotatePointHelper(Math3D.Vector3D p, float rx, float ry, float rz)
         {
             Math3D.Vector3D r = p;
@@ -358,6 +372,7 @@ namespace Motor3D_Educativo_P2
             return r;
         }
 
+        // Vector helpers para iluminación
         private static Math3D.Vector3D Subtract(Math3D.Vector3D a, Math3D.Vector3D b)
         {
             return new Math3D.Vector3D(a.x - b.x, a.y - b.y, a.z - b.z);
@@ -389,12 +404,14 @@ namespace Motor3D_Educativo_P2
         }
     }
 
+    // Clase para manejar la escena con múltiples modelos
     public class Escena
     {
         public List<Modelo3D> Modelos = new List<Modelo3D>();
 
         public void Draw(Graphics g, Point viewCenter, Camara cam)
         {
+            // Ordenar modelos por distancia a la cámara para un dibujado básico correcto (Painter's Algorithm a nivel de objeto)
             var sortedModels = Modelos.OrderByDescending(m => {
                 // Distancia desde el centro del modelo a la cámara
                 return Math.Sqrt(Math.Pow(m.Position.x - cam.Position.x, 2) +
@@ -409,6 +426,7 @@ namespace Motor3D_Educativo_P2
         }
     }
 
+    // --- MESH FACTORY (Sin cambios, solo para contexto) ---
     public static class MeshFactory
     {
         // Helper para crear caras
@@ -430,6 +448,7 @@ namespace Motor3D_Educativo_P2
             int count = f.Corners3D.Length;
             f.Center = new Math3D.Vector3D(cx / count, cy / count, cz / count);
 
+            // Asignar UVs básicas (triángulo o cuadrilátero)
             if (f.Corners3D.Length == 3)
             {
                 f.UVs = new System.Drawing.PointF[] { new PointF(0f, 0f), new PointF(1f, 0f), new PointF(0.5f, 1f) };
@@ -440,6 +459,7 @@ namespace Motor3D_Educativo_P2
             }
             else
             {
+                // Fallback: distribuir UVs en 0..1
                 f.UVs = new PointF[f.Corners3D.Length];
                 for (int i = 0; i < f.UVs.Length; i++) f.UVs[i] = new PointF((float)i / (f.UVs.Length - 1), 0f);
             }

@@ -8,7 +8,7 @@ namespace Motor3D_Educativo_P2.Core
         public Vector3 Rotation { get; set; } = Vector3.Zero;
 
         // CORRECCIÓN CRÍTICA: Escala debe ser 1, no 0.
-        public Vector3 Scale { get; set; } = new Vector3(1.0f, 1.0f, 1.0f);
+        public Vector3 Scale { get; set; } = new Vector3(1, 1, 1);
         public Matrix4 GetModelMatrix()
         {
             // 1. Escala

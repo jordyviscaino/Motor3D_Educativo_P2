@@ -52,6 +52,9 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Core\RenderMode.cs" />
+    <Compile Include="Core\Scene.cs" />
+    <Compile Include="Geometry\Camara.cs" />
     <Compile Include="Core\Mesh.cs" />
     <Compile Include="Core\Transform.cs" />
     <Compile Include="Core\Vertex.cs" />
@@ -61,7 +64,10 @@
     <Compile Include="Form1.Designer.cs">
       <DependentUpon>Form1.cs</DependentUpon>
     </Compile>
+    <Compile Include="Geometry\Figuras3D.cs" />
+    <Compile Include="Geometry\Math3D.cs" />
     <Compile Include="Geometry\MeshFactory.cs" />
+    <Compile Include="Core\Material.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <EmbeddedResource Include="Form1.resx">
@@ -75,7 +81,9 @@
     <Compile Include="Properties\Resources.Designer.cs">
       <AutoGen>True</AutoGen>
       <DependentUpon>Resources.resx</DependentUpon>
+      <DesignTime>True</DesignTime>
     </Compile>
+    <None Include="ACTUALIZACION_SLIDERS.md" />
     <None Include="OpenTK.dll.config" />
     <None Include="packages.config" />
     <None Include="Properties\Settings.settings">
@@ -90,6 +98,9 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Resources\Screenshot_1.jpg" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
